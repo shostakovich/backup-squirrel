@@ -54,10 +54,12 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
         let content = UNMutableNotificationContent()
         content.title = alert.title
         content.body = alert.body
-        content.categoryIdentifier = alert.style.rawValue
-        content.userInfo = [
-            Self.routeKey: AlertRoute.encode(alert.route), Self.commandKey: AlertRoute.encode(alert.command),
-        ]
+        var userInfo = [Self.routeKey: AlertRoute.encode(alert.route)]
+        if let command = alert.command, let style = alert.style {
+            content.categoryIdentifier = style.rawValue
+            userInfo[Self.commandKey] = AlertRoute.encode(command)
+        }
+        content.userInfo = userInfo
         let request = UNNotificationRequest(identifier: alert.key.identifier, content: content, trigger: nil)
         let center = center
         Task { try? await center.add(request) }

@@ -171,6 +171,8 @@ struct StatusEvaluator {
     static let catchUpGracePeriod: TimeInterval = 15 * 60
     /// Backups never retry more often than this once the short retries are used up.
     static let minimumBackupInterval: TimeInterval = 3600
+    /// A cancelled check or prune waits this long, so cancelling does not start it again right away.
+    static let pauseAfterCancel: TimeInterval = 3600
 
     /// 15 minutes, 30 minutes, 1 hour; after that the regular interval applies.
     static func retryDelay(afterFailures count: Int) -> TimeInterval? {
@@ -220,7 +222,7 @@ struct StatusEvaluator {
         } else if gap != nil {
             health = .incomplete(automatic: plan.backsUpAutomatically)
         } else if isScheduled, !isQueued,
-            isOverdue(since: lastSnapshot?.startedAt ?? plan.createdAt, plan.schedule.nominalInterval, state)
+            isOverdue(since: lastSnapshot?.endedAt ?? plan.createdAt, plan.schedule.nominalInterval, state)
         {
             health = .overdue
         } else if !failures.isEmpty {
@@ -252,8 +254,8 @@ struct StatusEvaluator {
                 nextRun = .whenVolumeConnected(missingVolume)
             } else if isQueued {
                 nextRun = .catchUp
-            } else if let failed = failures.last {
-                let end = failed.finishedAt ?? failed.startedAt
+            } else if let failed = failures.last, failed.id == finished.last?.id {
+                let end = failed.endedAt
                 let regular = max(
                     plan.schedule.nextRun(after: failed.startedAt, now: end, calendar: calendar),
                     end.addingTimeInterval(Self.minimumBackupInterval))
@@ -341,9 +343,10 @@ struct StatusEvaluator {
             pruneFailures: pruneFailures.count,
             nextCheck: checkQueued
                 ? .catchUp
-                : nextMaintenance(after: lastCheck?.startedAt ?? target.createdAt, failures: checkFailures, state),
+                : nextMaintenance(
+                    after: lastCheck?.startedAt ?? target.createdAt, attempts: checks, failures: checkFailures, state),
             nextPrune: nextMaintenance(
-                after: lastPrune?.startedAt ?? target.createdAt, failures: pruneFailures, state),
+                after: lastPrune?.startedAt ?? target.createdAt, attempts: prunes, failures: pruneFailures, state),
             lastConnection: (reached + [target.connectedAt].compactMap { $0 }).max()
         )
     }
@@ -419,14 +422,18 @@ struct StatusEvaluator {
         !isInGracePeriod(state) && state.now.timeIntervalSince(reference) > Self.overdueIntervals * interval
     }
 
-    private func nextMaintenance(after last: Date, failures: [Run], _ state: BackupState) -> NextRun {
-        if let failed = failures.last {
-            let end = failed.finishedAt ?? failed.startedAt
+    private func nextMaintenance(after last: Date, attempts: [Run], failures: [Run], _ state: BackupState) -> NextRun {
+        let newest = attempts.last
+        if let failed = failures.last, failed.id == newest?.id {
             let delay = Self.retryDelay(afterFailures: failures.count) ?? TargetStatus.maintenanceInterval
-            let due = end.addingTimeInterval(delay)
+            let due = failed.endedAt.addingTimeInterval(delay)
             return due > state.now ? .retry(due) : .catchUp
         }
         let due = last.addingTimeInterval(TargetStatus.maintenanceInterval)
+        if let newest, newest.status == .cancelled, newest.startedAt > last {
+            let resume = newest.endedAt.addingTimeInterval(Self.pauseAfterCancel)
+            if resume > due { return resume > state.now ? .retry(resume) : .catchUp }
+        }
         return due > state.now ? .at(due) : .catchUp
     }
 }

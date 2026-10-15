@@ -1,6 +1,6 @@
 import Foundation
 
-struct TimeOfDay: Hashable, Sendable {
+struct TimeOfDay: Hashable, Sendable, Codable {
     var hour: Int
     var minute: Int
 }

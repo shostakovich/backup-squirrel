@@ -202,9 +202,15 @@ struct ResticRunExecutorTests {
     }
 
     @Test func aBinaryThatCannotStartFailsTheRun() async throws {
-        let outcome = try #require(await outcome(of: .prune(Fixture.target()), on: LaunchFailingRunner()))
+        let outcome = try #require(await outcome(of: .prune(Fixture.target()), on: LaunchFailingRunner(code: EACCES)))
         #expect(outcome.status == .failed)
         #expect(outcome.failure == .other("restic konnte nicht gestartet werden"))
+    }
+
+    @Test func aMissingBinaryFailsTheRunSayingSo() async throws {
+        let outcome = try #require(await outcome(of: .prune(Fixture.target()), on: LaunchFailingRunner(code: ENOENT)))
+        #expect(outcome.status == .failed)
+        #expect(outcome.failure == .other("restic fehlt im Programmpaket"))
     }
 
     @Test func stoppingEndsResticAndFinishesCancelledWithItsOutput() async throws {
@@ -252,9 +258,11 @@ struct ResticRunExecutorTests {
 }
 
 private struct LaunchFailingRunner: ProcessRunner {
+    var code: Int32
+
     func run(_ invocation: ProcessInvocation, onOutput: @escaping @Sendable (OutputLine) -> Void) async throws -> Int32
     {
-        throw ProcessLaunchError(code: ENOENT)
+        throw ProcessLaunchError(code: code)
     }
 }
 

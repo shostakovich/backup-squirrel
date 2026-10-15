@@ -65,8 +65,9 @@ struct BackupAlert: Hashable, Sendable {
     var key: AlertKey
     var title: String
     var body: String
-    var command: AlertCommand
-    var style: AlertCommand.Style
+    /// Nil when a button could not help, such as for a plan whose volume is not connected.
+    var command: AlertCommand?
+    var style: AlertCommand.Style?
     /// Where a click on the notification leads.
     var route: MenuAction
 }
@@ -74,8 +75,28 @@ struct BackupAlert: Hashable, Sendable {
 struct AlertPlanner {
     let calendar: Calendar
 
-    /// A run in progress is ignored, so a retry that fails again does not count as a new problem.
+    /// A run in progress counts as waiting, so a catch-up that is still running is not overdue.
     func alerts(in state: BackupState) -> [BackupAlert] {
+        var state = state
+        let active = state.runs.filter { $0.status == .running }.compactMap(\.request)
+        state.queued += active.filter { !state.queued.contains($0) }
+        return problems(in: state)
+    }
+
+    /// Only problems that were not there before notify; without a record the first call just records the baseline.
+    func newAlerts(in state: BackupState, previous: Set<AlertKey>?) -> (current: Set<AlertKey>, new: [BackupAlert]) {
+        let alerts = alerts(in: state)
+        var current = Set(alerts.map(\.key))
+        guard let previous else { return (current, []) }
+        // A known problem must not vanish during a run or the wake grace period, or it would notify again after.
+        var settled = state
+        settled.queued = []
+        settled.awakeSince = .distantPast
+        current.formUnion(previous.intersection(problems(in: settled).map(\.key)))
+        return (current, alerts.filter { !previous.contains($0.key) })
+    }
+
+    private func problems(in state: BackupState) -> [BackupAlert] {
         var state = state
         state.runs.removeAll { $0.status == .running }
         let evaluator = StatusEvaluator(calendar: calendar)
@@ -86,22 +107,22 @@ struct AlertPlanner {
             let name = GermanFormat.quoted(plan.name)
             switch status.health {
             case .failed where status.consecutiveFailures >= 2:
-                alerts.append(
-                    BackupAlert(
-                        key: AlertKey(kind: .backupFailed, subject: plan.id),
-                        title: "Sicherung von \(name) fehlgeschlagen",
-                        body: sentences([
-                            status.failedAttempt.map { cause(of: $0, state) }, lastSnapshot(status, state),
-                        ]),
-                        command: .start(.backup(plan.id)), style: .retry,
-                        route: status.failedAttempt.map { .showRun($0.id) } ?? .showPlan(plan.id)))
+                alerts.append(failed(plan, status, state))
             case .overdue:
-                alerts.append(
-                    BackupAlert(
-                        key: AlertKey(kind: .overdue, subject: plan.id),
-                        title: "\(name) \(text.notBackedUpFor(status, state))",
-                        body: sentences([standstill(status.standstill, state), lastSnapshot(status, state)]),
-                        command: .start(.backup(plan.id)), style: .backUpNow, route: .showPlan(plan.id)))
+                switch status.standstill {
+                case .failing:
+                    if status.consecutiveFailures >= 2 { alerts.append(failed(plan, status, state)) }
+                case .volumeMissing, .cancelled, .noAttempt:
+                    let canBackUp: Bool
+                    if case .volumeMissing = status.standstill { canBackUp = false } else { canBackUp = true }
+                    alerts.append(
+                        BackupAlert(
+                            key: AlertKey(kind: .overdue, subject: plan.id),
+                            title: "\(name) \(text.notBackedUpFor(status, state))",
+                            body: sentences([standstill(status.standstill, state), lastSnapshot(status, state)]),
+                            command: canBackUp ? .start(.backup(plan.id)) : nil,
+                            style: canBackUp ? .backUpNow : nil, route: .showPlan(plan.id)))
+                }
             default:
                 break
             }
@@ -125,12 +146,13 @@ struct AlertPlanner {
         return alerts
     }
 
-    /// Only problems that were not there before notify; without a record the first call just records the baseline.
-    func newAlerts(in state: BackupState, previous: Set<AlertKey>?) -> (current: Set<AlertKey>, new: [BackupAlert]) {
-        let alerts = alerts(in: state)
-        let current = Set(alerts.map(\.key))
-        guard let previous else { return (current, []) }
-        return (current, alerts.filter { !previous.contains($0.key) })
+    private func failed(_ plan: Plan, _ status: PlanStatus, _ state: BackupState) -> BackupAlert {
+        BackupAlert(
+            key: AlertKey(kind: .backupFailed, subject: plan.id),
+            title: "Sicherung von \(GermanFormat.quoted(plan.name)) fehlgeschlagen",
+            body: sentences([status.failedAttempt.map { cause(of: $0, state) }, lastSnapshot(status, state)]),
+            command: .start(.backup(plan.id)), style: .retry,
+            route: status.failedAttempt.map { .showRun($0.id) } ?? .showPlan(plan.id))
     }
 
     private func alert(for target: Target, in state: BackupState, evaluator: StatusEvaluator) -> BackupAlert? {
@@ -205,7 +227,7 @@ struct AlertPlanner {
 
     private func lastSnapshot(_ status: PlanStatus, _ state: BackupState) -> String {
         guard let snapshot = status.lastSnapshot else { return "Es gibt noch keine Sicherung." }
-        let moment = RelativeDateText(calendar: calendar).string(for: snapshot.startedAt, now: state.now)
+        let moment = RelativeDateText(calendar: calendar).string(for: snapshot.endedAt, now: state.now)
         return "Die letzte Sicherung ist von \(moment)."
     }
 }

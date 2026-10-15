@@ -26,9 +26,9 @@ struct AlertPlannerTests {
         #expect(result.new.count == 1)
         let alert = result.new.first
         #expect(alert?.title == "Sicherung von „Daten“ fehlgeschlagen")
-        #expect(alert?.body == "„Storage Box“ ist nicht erreichbar. Die letzte Sicherung ist von gestern, 03:00.")
+        #expect(alert?.body == "„Storage Box“ ist nicht erreichbar. Die letzte Sicherung ist von gestern, 03:03.")
         #expect(alert?.style == .retry)
-        #expect(alert?.style.title == "Erneut versuchen")
+        #expect(alert?.style?.title == "Erneut versuchen")
         #expect(alert?.command == .start(.backup(Fixture.dataID)))
         #expect(alert?.route == .showRun(retry.id))
     }
@@ -60,17 +60,50 @@ struct AlertPlannerTests {
     }
 
     @Test func anOverduePlanNotifiesWithAButtonThatBacksItUp() {
-        let failure = failed(at: Fixture.date(2026, 10, 12, 3, 0))
-        let runs = [Fixture.backup(plan: Fixture.dataID, at: Fixture.date(2026, 10, 11, 3, 0)), failure]
-        let previous: Set = [AlertKey(kind: .backupFailed, subject: Fixture.dataID)]
-        let result = planner.newAlerts(in: Fixture.state(plans: [data], runs: runs), previous: previous)
+        let cancelled = Fixture.backup(plan: Fixture.dataID, status: .cancelled, at: Fixture.date(2026, 10, 12, 3, 0))
+        let runs = [Fixture.backup(plan: Fixture.dataID, at: Fixture.date(2026, 10, 11, 3, 0)), cancelled]
+        let result = planner.newAlerts(in: Fixture.state(plans: [data], runs: runs), previous: [])
         #expect(result.new.map(\.title) == ["„Daten“ seit 3 Tagen nicht gesichert"])
         #expect(
             result.new.first?.body
-                == "„Storage Box“ ist nicht erreichbar. Die letzte Sicherung ist von So., 11.10., 03:00.")
+                == "Der letzte Versuch am Mo., 12.10. wurde abgebrochen. Die letzte Sicherung ist von So., 11.10., 03:03."
+        )
         #expect(result.new.first?.style == .backUpNow)
         #expect(result.new.first?.command == .start(.backup(Fixture.dataID)))
         #expect(result.new.first?.route == .showPlan(Fixture.dataID))
+    }
+
+    @Test func anOverduePlanThatKeepsFailingReportsOnlyTheFailure() {
+        let snapshot = Fixture.backup(plan: Fixture.dataID, at: Fixture.date(2026, 10, 11, 3, 0))
+        let first = failed(at: Fixture.date(2026, 10, 12, 3, 0))
+        #expect(planner.alerts(in: Fixture.state(plans: [data], runs: [snapshot, first])).isEmpty)
+        let retry = failed(at: Fixture.date(2026, 10, 12, 3, 15))
+        let alerts = planner.alerts(in: Fixture.state(plans: [data], runs: [snapshot, first, retry]))
+        #expect(alerts.map(\.key) == [AlertKey(kind: .backupFailed, subject: Fixture.dataID)])
+    }
+
+    @Test func aKnownOverduePlanStaysKnownWhileAnotherRunsAndAfterWake() {
+        let home = Fixture.plan()
+        let runs = [
+            Fixture.backup(plan: Fixture.dataID, at: Fixture.date(2026, 10, 11, 3, 0)),
+            Fixture.backup(plan: Fixture.dataID, status: .cancelled, at: Fixture.date(2026, 10, 12, 3, 0)),
+            Fixture.backup(at: Fixture.date(2026, 10, 14, 12, 2)),
+        ]
+        let overdue = AlertKey(kind: .overdue, subject: Fixture.dataID)
+        let known = planner.newAlerts(in: Fixture.state(plans: [data, home], runs: runs), previous: []).current
+        #expect(known == [overdue])
+
+        let running = runs + [Fixture.backup(status: .running, at: Fixture.date(2026, 10, 14, 13, 19))]
+        let duringRun = planner.newAlerts(in: Fixture.state(plans: [data, home], runs: running), previous: known)
+        #expect(duringRun.current == [overdue])
+        let afterRun = runs + [Fixture.backup(at: Fixture.date(2026, 10, 14, 13, 19), duration: 30)]
+        #expect(
+            planner.newAlerts(in: Fixture.state(plans: [data, home], runs: afterRun), previous: duringRun.current)
+                .new.isEmpty)
+
+        let justAwake = Fixture.state(plans: [data, home], runs: runs, awakeSince: Fixture.now.addingTimeInterval(-60))
+        #expect(planner.newAlerts(in: justAwake, previous: known).current == [overdue])
+        #expect(planner.newAlerts(in: justAwake, previous: []).new.isEmpty, "a new problem waits for the catch-up")
     }
 
     @Test func damagedDataNotifiesRightAwayWithACheckButton() {
@@ -115,7 +148,7 @@ struct AlertPlannerTests {
         #expect(alerts.map(\.title) == ["Meldung an Uptime Kuma fehlgeschlagen"])
         #expect(alerts.first?.body == "Uptime Kuma hat die Meldung für „Home-Verzeichnis“ abgelehnt (HTTP 404).")
         #expect(alerts.first?.style == .resendReport)
-        #expect(alerts.first?.style.title == "Erneut melden")
+        #expect(alerts.first?.style?.title == "Erneut melden")
         #expect(alerts.first?.command == .resendReport(Fixture.homeID))
     }
 
@@ -161,8 +194,9 @@ struct AlertPlannerTests {
         let runs = [
             Fixture.backup(plan: Fixture.dataID, at: Fixture.date(2026, 10, 11, 3, 0)),
             failed(at: Fixture.date(2026, 10, 12, 3, 0)), failed(at: Fixture.date(2026, 10, 12, 3, 15)),
+            Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), errorCount: 3),
         ]
         let result = planner.newAlerts(in: Fixture.state(plans: [data], runs: runs), previous: known)
-        #expect(result.new.map(\.key) == [AlertKey(kind: .overdue, subject: Fixture.dataID)])
+        #expect(result.new.map(\.key) == [AlertKey(kind: .checkFoundErrors, subject: Fixture.targetID)])
     }
 }

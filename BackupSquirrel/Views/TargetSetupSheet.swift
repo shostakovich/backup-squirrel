@@ -44,7 +44,7 @@ struct TargetSetupSheet: View {
 
             HStack {
                 switch setup.leadingButton {
-                case .cancel: Button("Abbrechen", role: .cancel, action: close)
+                case .cancel: Button("Abbrechen", role: .cancel, action: cancel)
                 case .back: Button("Zurück") { setup.goBack() }
                 case .skip: Button("Überspringen") { setup.skip() }
                 case nil: EmptyView()
@@ -58,7 +58,7 @@ struct TargetSetupSheet: View {
         }
         .frame(width: Self.size.width, height: Self.size.height)
         .background {
-            Button("Abbrechen", action: close)
+            Button("Abbrechen", action: cancel)
                 .keyboardShortcut(.cancelAction)
                 .opacity(0)
                 .accessibilityHidden(true)
@@ -87,7 +87,27 @@ struct TargetSetupSheet: View {
 
     private var keyStep: some View {
         Section {
-            InstallCommandRow(command: setup.target.sshKey.installCommand(for: setup.target))
+            switch setup.keyState {
+            case .generating:
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Schlüssel wird erzeugt …")
+                        .foregroundStyle(.secondary)
+                }
+            case .ready:
+                InstallCommandRow(command: setup.target.sshKey.installCommand(for: setup.target))
+            case .failed(let message):
+                HStack(spacing: 8) {
+                    Label {
+                        Text(message)
+                    } icon: {
+                        StatusSymbolView(symbol: .failure)
+                    }
+                    Spacer(minLength: 12)
+                    Button("Erneut versuchen") { Task { await setup.generateKey() } }
+                }
+            }
         } footer: {
             Text(
                 "Dabei einmal das Passwort der Storage Box eingeben. Backup-Squirrel hat für dieses Ziel einen "
@@ -125,11 +145,8 @@ struct TargetSetupSheet: View {
         } footer: {
             Text("Ein vorhandenes Repository wird weiterverwendet, die Sicherungen darin bleiben erhalten.")
         }
-        .task(id: setup.connectionTest) {
+        .onAppear {
             if setup.connectionTest == .idle { testConnection() }
-            if setup.connectionTest == .succeeded, setup.repository == .searching {
-                setup.repository = await SimulatedConnection().detectRepository(at: setup.target)
-            }
         }
     }
 
@@ -140,7 +157,7 @@ struct TargetSetupSheet: View {
                 SecureField("Passwort", text: $setup.password)
                 switch setup.passwordCheck {
                 case .idle:
-                    EmptyView()
+                    if let problem = setup.passwordProblem { PasswordProblemRow(message: problem) }
                 case .checking:
                     HStack(spacing: 6) {
                         ProgressView()
@@ -150,7 +167,13 @@ struct TargetSetupSheet: View {
                     }
                 case .wrong:
                     Label {
-                        Text("Passwort passt nicht zu diesem Repository.")
+                        Text(TargetSetup.wrongPasswordMessage)
+                    } icon: {
+                        StatusSymbolView(symbol: .failure)
+                    }
+                case .failed(let message):
+                    Label {
+                        Text(message)
                     } icon: {
                         StatusSymbolView(symbol: .failure)
                     }
@@ -179,6 +202,7 @@ struct TargetSetupSheet: View {
                         .help("Passwort kopieren")
                     }
                 }
+                if let problem = setup.passwordProblem { PasswordProblemRow(message: problem) }
                 Toggle("Passwort in 1Password gespeichert", isOn: $setup.isPasswordStored)
                     .toggleStyle(.checkbox)
                     .disabled(setup.password.isEmpty)
@@ -207,6 +231,23 @@ struct TargetSetupSheet: View {
                 }
             }
             LabeledContent("Passwort", value: "Wird im Schlüsselbund gespeichert")
+            switch setup.creation {
+            case .idle:
+                EmptyView()
+            case .working:
+                HStack(spacing: 6) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text(setup.isExistingRepository ? "Wird verbunden …" : "Repository wird angelegt …")
+                        .foregroundStyle(.secondary)
+                }
+            case .failed(let message):
+                Label {
+                    Text(message)
+                } icon: {
+                    StatusSymbolView(symbol: .failure)
+                }
+            }
         } footer: {
             Text("Mit dieser Adresse lassen sich die Sicherungen auch ohne Backup-Squirrel mit restic lesen.")
         }
@@ -304,24 +345,16 @@ struct TargetSetupSheet: View {
         case .connection, .key, .test:
             setup.goForward()
         case .password:
-            guard setup.isExistingRepository else { return setup.goForward() }
-            setup.passwordCheck = .checking
-            let password = setup.password
-            let target = setup.target
-            Task {
-                let matches = await SimulatedConnection().verifyPassword(password, for: target) == .matches
-                guard setup.password == password else { return }
-                setup.passwordCheck = matches ? .idle : .wrong
-                if matches { setup.goForward() }
-            }
+            Task { await setup.submitPassword() }
         case .create:
-            model.addTarget(setup.target, password: setup.password)
-            model.markConnected(setup.target.id)
-            if setup.isOnboarding {
-                setup.goForward()
-            } else {
-                close()
-                router.selection = .target(setup.target.id)
+            Task {
+                guard await setup.createRepository(in: model) else { return }
+                if setup.isOnboarding {
+                    setup.goForward()
+                } else {
+                    close()
+                    router.selection = .target(setup.target.id)
+                }
             }
         case .plan:
             setup.createdPlanID = model.addPlan(
@@ -338,17 +371,29 @@ struct TargetSetupSheet: View {
         router.targetSetup = nil
     }
 
+    private func cancel() {
+        setup.cancel()
+        close()
+    }
+
     private func generatePassword() {
         var generator = SystemRandomNumberGenerator()
         setup.generatePassword(using: &generator)
     }
 
     private func testConnection() {
-        setup.connectionTest = .testing
-        setup.repository = .searching
-        let target = setup.target
-        Task {
-            setup.finishConnectionTest(await SimulatedConnection().test(target))
+        Task { await setup.testConnection() }
+    }
+}
+
+private struct PasswordProblemRow: View {
+    let message: String
+
+    var body: some View {
+        Label {
+            Text(message)
+        } icon: {
+            StatusSymbolView(symbol: .failure)
         }
     }
 }

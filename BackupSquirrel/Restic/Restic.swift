@@ -21,8 +21,12 @@ struct Restic: Hashable, Sendable {
     var paths: AppPaths
     var access = RepositoryAccess.sftp
 
-    static func bundled(paths: AppPaths = .standard) -> Restic? {
-        Bundle.main.url(forAuxiliaryExecutable: "restic").map { Restic(binary: $0, paths: paths) }
+    /// Where the build puts restic; if it is missing, every run fails saying so.
+    static func bundled(paths: AppPaths = .standard) -> Restic {
+        let binary =
+            Bundle.main.url(forAuxiliaryExecutable: "restic")
+            ?? Bundle.main.bundleURL.appending(path: "Contents/MacOS/restic", directoryHint: .notDirectory)
+        return Restic(binary: binary, paths: paths)
     }
 
     /// The password travels on stdin and a new one on fd 3, never through the environment or a file.

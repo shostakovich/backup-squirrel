@@ -184,7 +184,12 @@
                 for (appearance, suffix) in Self.appearances {
                     let model = model(
                         .empty, system: SystemState(hasFullDiskAccess: false, notifications: .notDetermined))
-                    let setup = TargetSetup(target: model.makeTargetDraft(), isOnboarding: true)
+                    let id = UUID()
+                    let setup = TargetSetup(
+                        target: Target(
+                            id: id, name: "Storage Box", sshKey: .simulated(for: id), createdAt: Self.referenceDate),
+                        isOnboarding: true, connection: SimulatedConnection(), keys: SimulatedSSHKeys())
+                    setup.keyState = .ready
                     if shot.step != .connection {
                         setup.target.host = "u123456.your-storagebox.de"
                         setup.target.user = "u123456-sub1"
@@ -193,7 +198,7 @@
                         setup.repository = shot.repository
                     }
                     if shot.step == .permissions {
-                        model.addTarget(setup.target, password: "beispiel")
+                        try? model.addTarget(setup.target, password: "beispiel")
                         setup.createdPlanID = model.addPlan(
                             name: "Home-Verzeichnis", targetID: setup.target.id,
                             sourceFolders: [URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)])
@@ -397,11 +402,12 @@
                 lines +=
                     alerts.isEmpty
                     ? ["(none)"]
-                    : alerts.flatMap { alert in
-                        [
-                            "• \(alert.title)", "  \(alert.body)",
-                            "  [Button „\(alert.style.title)“ → \(alert.command)] [Klick → \(alert.route)]",
-                        ]
+                    : alerts.flatMap { alert -> [String] in
+                        var button = ""
+                        if let style = alert.style, let command = alert.command {
+                            button = "[Button „\(style.title)“ → \(command)] "
+                        }
+                        return ["• \(alert.title)", "  \(alert.body)", "  \(button)[Klick → \(alert.route)]"]
                     }
                 writeText(lines.joined(separator: "\n") + "\n", "menu-\(scenario.rawValue)")
             }

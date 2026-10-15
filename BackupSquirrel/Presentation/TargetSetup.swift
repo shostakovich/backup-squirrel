@@ -28,10 +28,23 @@ final class TargetSetup: Identifiable {
         case permissions
     }
 
+    enum KeyState: Hashable, Sendable {
+        case generating
+        case ready
+        case failed(String)
+    }
+
     enum PasswordCheck: Hashable, Sendable {
         case idle
         case checking
         case wrong
+        case failed(String)
+    }
+
+    enum Creation: Hashable, Sendable {
+        case idle
+        case working
+        case failed(String)
     }
 
     enum LeadingButton: Hashable, Sendable {
@@ -46,9 +59,12 @@ final class TargetSetup: Identifiable {
         case manual
     }
 
+    static let wrongPasswordMessage = "Passwort passt nicht zu diesem Repository."
+
     let isOnboarding: Bool
     var step = Step.connection
     var target: Target
+    var keyState = KeyState.generating
     var connectionTest = ConnectionTest.idle
     var repository = RepositoryDetection.searching
     var password = "" {
@@ -65,10 +81,22 @@ final class TargetSetup: Identifiable {
     var rhythm = Rhythm.hours(1)
     var dailyTime = TimeOfDay(hour: 3, minute: 0)
     var createdPlanID: Plan.ID?
+    var creation = Creation.idle
+    private(set) var isTargetAdded = false
 
-    init(target: Target, isOnboarding: Bool = false) {
+    @ObservationIgnored private let connection: any TargetConnection
+    @ObservationIgnored private let keys: any SSHKeyGenerating
+    @ObservationIgnored private var isCancelled = false
+    /// Bumped whenever the connection changes, so a late answer for the old one is dropped.
+    @ObservationIgnored private var connectionGeneration = 0
+
+    init(
+        target: Target, isOnboarding: Bool = false, connection: any TargetConnection, keys: any SSHKeyGenerating
+    ) {
         self.target = target
         self.isOnboarding = isOnboarding
+        self.connection = connection
+        self.keys = keys
     }
 
     var steps: [Step] {
@@ -134,18 +162,25 @@ final class TargetSetup: Identifiable {
     var canContinue: Bool {
         switch step {
         case .connection:
-            !target.name.trimmingCharacters(in: .whitespaces).isEmpty
-                && !target.host.trimmingCharacters(in: .whitespaces).isEmpty
-                && !target.user.trimmingCharacters(in: .whitespaces).isEmpty && (1...65_535).contains(target.port)
-        case .key, .create, .permissions:
+            !target.name.trimmingCharacters(in: .whitespaces).isEmpty && target.hasValidConnection
+        case .key:
+            keyState == .ready
+        case .create:
+            creation != .working
+        case .permissions:
             true
         case .test:
             connectionTest == .succeeded && repository != .searching
         case .password:
-            !password.isEmpty && passwordCheck != .checking && (isExistingRepository || isPasswordStored)
+            !password.isEmpty && passwordProblem == nil && passwordCheck != .checking
+                && (isExistingRepository || isPasswordStored)
         case .plan:
             !planFolders.isEmpty
         }
+    }
+
+    var passwordProblem: String? {
+        password.isEmpty ? nil : RepositoryPassword.problem(with: password)
     }
 
     var schedule: Schedule {
@@ -168,6 +203,7 @@ final class TargetSetup: Identifiable {
 
     func goForward() {
         guard canContinue, let index = steps.firstIndex(of: step), index + 1 < steps.count else { return }
+        if step == .connection { target = target.trimmingConnection() }
         step = steps[index + 1]
     }
 
@@ -194,7 +230,88 @@ final class TargetSetup: Identifiable {
 
     /// A changed connection invalidates what the test found.
     func resetConnectionTest() {
+        connectionGeneration += 1
         connectionTest = .idle
         repository = .searching
+    }
+
+    func generateKey() async {
+        keyState = .generating
+        do {
+            let key = try await keys.generateKey(for: target.id)
+            if isCancelled {
+                try? keys.removeKey(for: target.id)
+                return
+            }
+            target.sshKey = key
+            keyState = .ready
+        } catch {
+            let detail = (error as? SSHKeyError)?.message ?? error.localizedDescription
+            keyState = .failed("SSH-Schlüssel konnte nicht erzeugt werden: \(detail)")
+        }
+    }
+
+    func testConnection() async {
+        connectionGeneration += 1
+        let generation = connectionGeneration
+        let target = target
+        connectionTest = .testing
+        repository = .searching
+        let result = await connection.test(target)
+        guard generation == connectionGeneration else { return }
+        finishConnectionTest(result)
+        guard result == .succeeded else { return }
+        let detection = await connection.detectRepository(at: target)
+        guard generation == connectionGeneration else { return }
+        repository = detection
+    }
+
+    /// A new repository's password only needs to be kept safe; an existing one's must open it.
+    func submitPassword() async {
+        guard step == .password, canContinue else { return }
+        guard isExistingRepository else { return goForward() }
+        let password = password
+        passwordCheck = .checking
+        let result = await connection.verifyPassword(password, for: target)
+        guard self.password == password, step == .password else { return }
+        switch result {
+        case .matches:
+            passwordCheck = .idle
+            goForward()
+        case .wrong:
+            passwordCheck = .wrong
+        case .failed(let message):
+            passwordCheck = .failed(message)
+        }
+    }
+
+    func createRepository(in model: AppModel) async -> Bool {
+        guard step == .create, creation != .working, !isTargetAdded, passwordProblem == nil else { return false }
+        creation = .working
+        if !isExistingRepository {
+            if case .failed(let message) = await connection.createRepository(for: target, password: password) {
+                creation = .failed(message)
+                return false
+            }
+            // From now on it exists, so going back asks for the password that opens it.
+            repository = .found(snapshots: 0)
+        }
+        do {
+            try model.addTarget(target, password: password)
+        } catch {
+            creation = .failed(error.localizedDescription)
+            return false
+        }
+        model.markConnected(target.id)
+        isTargetAdded = true
+        creation = .idle
+        return true
+    }
+
+    /// The key of a target that was never added is of no use.
+    func cancel() {
+        isCancelled = true
+        guard !isTargetAdded else { return }
+        try? keys.removeKey(for: target.id)
     }
 }

@@ -150,11 +150,19 @@ final class MockRunExecutor: RunExecutor {
         return reportResult
     }
 
+    private(set) var stops = 0
+    /// False makes a stopped job wait for `finish`, as restic takes a while to exit.
+    var endsWhenStopped = true
+
     func execute(_ job: RunJob) -> RunExecution {
         jobs.append(job)
         let (stream, continuation) = AsyncStream<RunEvent>.makeStream()
         self.continuation = continuation
-        return RunExecution(events: stream) { continuation.finish() }
+        return RunExecution(events: stream) { [weak self] in
+            guard let self else { return }
+            stops += 1
+            if endsWhenStopped { continuation.finish() }
+        }
     }
 
     func send(_ event: RunEvent) {

@@ -17,8 +17,7 @@ struct HistoryView: View {
             } actions: {
                 if model.targets.isEmpty {
                     Button("Backup-Squirrel einrichten …") {
-                        router.targetSetup = TargetSetup(
-                            target: model.makeTargetDraft(), isOnboarding: model.plans.isEmpty)
+                        router.targetSetup = model.makeTargetSetup()
                     }
                     .buttonStyle(.borderedProminent)
                 }

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import Security
 
 @MainActor
 @Observable
@@ -13,20 +14,30 @@ final class AppModel {
     private(set) var awakeSince: Date
     private(set) var system: SystemState
     private(set) var reportingPlans: Set<Plan.ID> = []
-    private var repositoryPasswords: [Target.ID: String]
+    /// Kept here so views need not ask the Keychain on every update.
+    private(set) var targetsWithPassword: Set<Target.ID>
 
     let calendar: Calendar
     @ObservationIgnored private let currentDate: () -> Date
     @ObservationIgnored private let executor: any RunExecutor
+    @ObservationIgnored private let passwords: any PasswordStore
+    @ObservationIgnored private let connection: any TargetConnection
+    @ObservationIgnored private let keys: any SSHKeyGenerating
     @ObservationIgnored private let inspectSystem: () -> SystemState
     @ObservationIgnored private var activeTask: Task<Void, Never>?
+    @ObservationIgnored private var stopActiveJob: (() -> Void)?
+    @ObservationIgnored private var stopReason: StopReason?
+    @ObservationIgnored private var isShuttingDown = false
     @ObservationIgnored private var clockTask: Task<Void, Never>?
+    @ObservationIgnored private var isScheduling = false
 
     init(
         targets: [Target] = [],
         plans: [Plan] = [],
         runs: [Run] = [],
-        repositoryPasswords: [Target.ID: String] = [:],
+        passwords: any PasswordStore,
+        connection: any TargetConnection,
+        keys: any SSHKeyGenerating,
         calendar: Calendar = .current,
         currentDate: @escaping () -> Date = Date.init,
         awakeSince: Date? = nil,
@@ -36,7 +47,10 @@ final class AppModel {
         self.targets = targets
         self.plans = plans
         self.runs = runs
-        self.repositoryPasswords = repositoryPasswords
+        self.passwords = passwords
+        self.connection = connection
+        self.keys = keys
+        targetsWithPassword = Set(targets.map(\.id).filter(passwords.hasPassword(for:)))
         self.calendar = calendar
         self.currentDate = currentDate
         self.executor = executor
@@ -71,7 +85,7 @@ final class AppModel {
 
     @discardableResult
     func start(_ request: RunRequest, startedAt: Date? = nil) -> Bool {
-        guard !isBusy, let job = job(for: request) else { return false }
+        guard !isBusy, !isShuttingDown, let job = job(for: request) else { return false }
         let run = Run(
             planID: request.planID,
             targetID: job.target.id,
@@ -81,9 +95,10 @@ final class AppModel {
         )
         runs.append(run)
         progress = nil
-        let events = executor.execute(job).events
+        let execution = executor.execute(job)
+        stopActiveJob = execution.stop
         activeTask = Task { [weak self] in
-            for await event in events {
+            for await event in execution.events {
                 self?.apply(event, to: run.id)
             }
             self?.finishIfStillRunning(run.id)
@@ -93,7 +108,7 @@ final class AppModel {
 
     /// Starts right away or after the runs already waiting, as notification actions need.
     func request(_ request: RunRequest) {
-        guard job(for: request) != nil else { return }
+        guard job(for: request) != nil, activeRun?.request != request else { return }
         if isBusy {
             if !queuedRequests.contains(request) { queuedRequests.append(request) }
         } else {
@@ -108,8 +123,28 @@ final class AppModel {
     }
 
     func cancelActiveRun() {
+        stop(as: .cancelled)
+    }
+
+    func shutDown(waitingAtMost limit: Duration) async {
+        isShuttingDown = true
+        isScheduling = false
+        clockTask?.cancel()
+        stop(as: .interrupted)
+        let deadline = ContinuousClock.now + limit
+        while isBusy, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        if let run = activeRun {
+            complete(run.id) { $0.end(as: .interrupted) }
+        }
+    }
+
+    private func stop(as reason: StopReason) {
         queuedRequests.removeAll()
-        activeTask?.cancel()
+        guard isBusy else { return }
+        if stopReason == nil { stopReason = reason }
+        stopActiveJob?()
     }
 
     private func apply(_ event: RunEvent, to runID: Run.ID) {
@@ -117,19 +152,42 @@ final class AppModel {
         case .progress(let newProgress):
             progress = newProgress
         case .finished(let outcome):
+            var details = outcome.details
+            if case .prune(var statistics) = details, outcome.status == .success,
+                let prune = runs.first(where: { $0.id == runID })
+            {
+                statistics.snapshotsRemoved = snapshotsForgotten(before: prune)
+                details = .prune(statistics)
+            }
+            let reason = stopReason
             complete(runID) { run in
                 run.status = outcome.status
-                run.details = outcome.details
+                run.details = details
                 run.failure = outcome.failure
                 run.output = outcome.output
                 run.monitorPush = outcome.monitorPush
+                if outcome.status == .cancelled, let reason { run.end(as: reason) }
             }
+        }
+    }
+
+    /// What retention removed since the last successful prune is what this prune cleared away.
+    private func snapshotsForgotten(before prune: Run) -> Int {
+        let previous = runs.last {
+            $0.targetID == prune.targetID && $0.kind == .prune && $0.status == .success && $0.id != prune.id
+        }
+        return runs.reduce(0) { sum, run in
+            guard run.targetID == prune.targetID, run.startedAt > (previous?.startedAt ?? .distantPast),
+                case .backup(let statistics) = run.details
+            else { return sum }
+            return sum + statistics.snapshotsForgotten
         }
     }
 
     private func finishIfStillRunning(_ runID: Run.ID) {
         guard runs.contains(where: { $0.id == runID && $0.status == .running }) else { return }
-        complete(runID) { $0.status = .cancelled }
+        let reason = stopReason ?? .cancelled
+        complete(runID) { $0.end(as: reason) }
     }
 
     /// Completes in one main actor turn, so no other run can start before this one is fully recorded.
@@ -141,6 +199,8 @@ final class AppModel {
         }
         progress = nil
         activeTask = nil
+        stopActiveJob = nil
+        stopReason = nil
         now = finishedAt
         startNextQueuedRequest()
     }
@@ -196,11 +256,34 @@ final class AppModel {
         awakeSince = currentDate()
         refreshNow()
         refreshSystem()
+        scheduleDueRuns()
     }
 
+    /// Also called when a volume is mounted or unmounted, so a plan whose volume appears starts.
     func refreshSystem() {
         let current = inspectSystem()
-        if current != system { system = current }
+        guard current != system else { return }
+        system = current
+        refreshNow()
+        scheduleDueRuns()
+    }
+
+    func tick() {
+        refreshNow()
+        scheduleDueRuns()
+    }
+
+    /// Only the real app schedules; debug scenarios and snapshots keep their sample state.
+    func startScheduling() {
+        isScheduling = true
+        tick()
+    }
+
+    private func scheduleDueRuns() {
+        guard isScheduling else { return }
+        for request in Scheduler(calendar: calendar).dueRequests(in: state) {
+            self.request(request)
+        }
     }
 
     func startClock(interval: Duration = .seconds(20)) {
@@ -209,7 +292,7 @@ final class AppModel {
             while !Task.isCancelled {
                 try? await Task.sleep(for: interval)
                 guard let self else { return }
-                self.refreshNow()
+                self.tick()
             }
         }
     }
@@ -237,19 +320,28 @@ final class AppModel {
     }
 
     /// The key pair is generated as soon as a target is set up, so its install command can be shown right away.
-    func makeTargetDraft() -> Target {
-        let id = UUID()
-        return Target(
-            id: id,
+    func makeTargetSetup() -> TargetSetup {
+        let target = Target(
             name: uniqueName("Storage Box", existing: targets.map(\.name)),
-            sshKey: SSHKey.simulated(for: id),
+            sshKey: SSHKey(publicKey: "", publicKeyPath: ""),
             createdAt: currentDate()
         )
+        let setup = TargetSetup(target: target, isOnboarding: plans.isEmpty, connection: connection, keys: keys)
+        Task { await setup.generateKey() }
+        return setup
     }
 
-    func addTarget(_ target: Target, password: String) {
+    /// The password goes into the Keychain first; without it the target would be useless.
+    func addTarget(_ target: Target, password: String) throws {
+        try storePassword(password, for: target.id)
         targets.append(target)
-        repositoryPasswords[target.id] = password
+    }
+
+    func testConnection(of id: Target.ID) async -> ConnectionTest {
+        guard let target = target(id) else { return .idle }
+        let result = await connection.test(target)
+        if result == .succeeded { markConnected(id) }
+        return result
     }
 
     func markConnected(_ id: Target.ID) {
@@ -282,20 +374,58 @@ final class AppModel {
         plans.removeAll { $0.id == id }
     }
 
+    /// The Keychain item and key files go too; what cannot be removed is harmless without the target.
     func deleteTarget(_ id: Target.ID) {
         targets.removeAll { $0.id == id }
         for index in plans.indices where plans[index].targetID == id {
             plans[index].targetID = nil
         }
-        repositoryPasswords[id] = nil
+        try? passwords.removePassword(for: id)
+        targetsWithPassword.remove(id)
+        try? keys.removeKey(for: id)
+    }
+
+    func hasRepositoryPassword(for id: Target.ID) -> Bool {
+        targetsWithPassword.contains(id)
     }
 
     func repositoryPassword(for id: Target.ID) -> String? {
-        repositoryPasswords[id]
+        passwords.password(for: id)
     }
 
-    func setRepositoryPassword(_ password: String, for id: Target.ID) {
-        repositoryPasswords[id] = password
+    func changeRepositoryPassword(of id: Target.ID, to newPassword: String) async -> String? {
+        if let problem = RepositoryPassword.problem(with: newPassword) { return problem }
+        guard let target = target(id) else { return nil }
+        if let oldPassword = passwords.password(for: id) {
+            let change = await connection.changePassword(of: target, from: oldPassword, to: newPassword)
+            if case .failed(let message) = change { return message }
+            do {
+                try storePassword(newPassword, for: id)
+            } catch {
+                return "Das Repository hat jetzt das neue Passwort. \(error.localizedDescription)"
+            }
+            return nil
+        }
+        switch await connection.verifyPassword(newPassword, for: target) {
+        case .matches: break
+        case .wrong: return TargetSetup.wrongPasswordMessage
+        case .failed(let message): return message
+        }
+        do {
+            try storePassword(newPassword, for: id)
+        } catch {
+            return error.localizedDescription
+        }
+        return nil
+    }
+
+    private func storePassword(_ password: String, for id: Target.ID) throws {
+        do {
+            try passwords.setPassword(password, for: id)
+        } catch {
+            throw PasswordStoreError(underlying: error)
+        }
+        targetsWithPassword.insert(id)
     }
 
     private func uniqueName(_ base: String, existing: [String]) -> String {
@@ -306,30 +436,54 @@ final class AppModel {
     }
 }
 
+private enum StopReason {
+    case cancelled
+    case interrupted
+}
+
+extension Run {
+    fileprivate mutating func end(as reason: StopReason) {
+        switch reason {
+        case .cancelled:
+            status = .cancelled
+        case .interrupted:
+            status = .failed
+            failure = .interrupted
+        }
+    }
+}
+
 extension RunRequest {
     var planID: Plan.ID? {
         if case .backup(let id) = self { id } else { nil }
     }
 }
 
-extension SSHKey {
-    static func defaultPath(for targetID: Target.ID) -> String {
-        "Library/Application Support/Backup-Squirrel/Keys/\(targetID.uuidString.lowercased()).pub"
-    }
+struct PasswordStoreError: LocalizedError {
+    var underlying: any Error
 
-    /// Stands in for `ssh-keygen` until the real key handling exists.
-    static func simulated(for targetID: Target.ID) -> SSHKey {
-        let bytes = withUnsafeBytes(of: targetID.uuid) { Data($0) }
-        let material = (bytes + bytes.reversed()).base64EncodedString().replacingOccurrences(of: "=", with: "")
-        return SSHKey(
-            publicKey: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI\(material) backup-squirrel",
-            publicKeyPath: defaultPath(for: targetID)
-        )
+    var errorDescription: String? {
+        let detail =
+            if let keychain = underlying as? KeychainError {
+                (SecCopyErrorMessageString(keychain.status, nil) as String?) ?? "Fehler \(keychain.status)"
+            } else {
+                underlying.localizedDescription
+            }
+        return "Passwort konnte nicht im Schlüsselbund gespeichert werden (\(detail))."
     }
 }
 
 enum RepositoryPassword {
     private static let alphabet = Array("abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+
+    /// restic trims a password it reads from a file but not one from stdin, so such a password would lock us out.
+    static func problem(with password: String) -> String? {
+        let isClean =
+            password == password.trimmingCharacters(in: .whitespacesAndNewlines)
+            && !password.contains(where: \.isNewline)
+        return isClean
+            ? nil : "Das Passwort darf keine Leerzeichen am Anfang oder Ende und keine Zeilenumbrüche enthalten."
+    }
 
     /// Six groups of five characters: about 170 bits, and easy to read aloud or type.
     static func generate(using generator: inout some RandomNumberGenerator) -> String {

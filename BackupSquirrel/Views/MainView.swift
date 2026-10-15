@@ -58,7 +58,7 @@ struct MainView: View {
                 Text("Zuerst ein Ziel hinzufügen, zum Beispiel eine Storage Box. Danach folgt der erste Plan.")
             } actions: {
                 Button("Backup-Squirrel einrichten …") {
-                    router.targetSetup = TargetSetup(target: model.makeTargetDraft(), isOnboarding: model.plans.isEmpty)
+                    router.targetSetup = model.makeTargetSetup()
                 }
                 .buttonStyle(.borderedProminent)
             }

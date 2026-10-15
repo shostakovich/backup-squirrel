@@ -72,8 +72,10 @@ struct ResticJobRunner: Sendable {
             case .check(_, let subset): return try await check(subset: subset, in: session)
             case .prune: return try await prune(in: session)
             }
-        } catch is ProcessLaunchError {
-            return session.outcome(.failed, details, failure: .other("restic konnte nicht gestartet werden"))
+        } catch let error as ProcessLaunchError {
+            let message =
+                error.code == ENOENT ? "restic fehlt im Programmpaket" : "restic konnte nicht gestartet werden"
+            return session.outcome(.failed, details, failure: .other(message))
         } catch is UnquotableArgument {
             return session.outcome(.failed, details, failure: .other("Zugangsdaten enthalten ungültige Zeichen"))
         } catch {

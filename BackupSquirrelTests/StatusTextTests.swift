@@ -39,7 +39,7 @@ struct StatusTextTests {
     @Test func allCurrentWithOnePlanNamesItsLastSnapshot() {
         let headline = text.headline(for: Fixture.state(runs: [Fixture.backup(at: lastHour)]))
         #expect(headline.title == "Alle Sicherungen aktuell")
-        #expect(headline.subtitle == "Zuletzt gesichert: heute, 13:02")
+        #expect(headline.subtitle == "Zuletzt gesichert: heute, 13:05")
     }
 
     @Test func allCurrentWithSeveralPlansLeavesTheDatesToThePlanRows() {
@@ -69,7 +69,7 @@ struct StatusTextTests {
         ]
         let state = Fixture.state(plans: [Fixture.plan(), orphan], runs: runs)
         #expect(text.headline(for: state) == ("„Daten“ sichert nicht automatisch", "Kein Ziel ausgewählt"))
-        #expect(text.summary(of: orphan, in: state) == "Kein Ziel ausgewählt · zuletzt gesichert gestern, 03:00")
+        #expect(text.summary(of: orphan, in: state) == "Kein Ziel ausgewählt · zuletzt gesichert gestern, 03:03")
         #expect(text.menuSymbol(for: PlanHealth.incomplete(automatic: true)) == .warning)
     }
 
@@ -81,7 +81,7 @@ struct StatusTextTests {
         ]
         let headline = text.headline(for: Fixture.state(plans: [Fixture.plan(), data], runs: runs))
         #expect(headline.title == "Sicherung von „Daten“ fehlgeschlagen")
-        #expect(headline.subtitle == "Zuletzt gesichert: gestern, 03:00")
+        #expect(headline.subtitle == "Zuletzt gesichert: gestern, 03:03")
     }
 
     @Test func theNewestSnapshotOfAnotherPlanNeverMasksAStalePlan() {
@@ -90,7 +90,7 @@ struct StatusTextTests {
         ]
         let headline = text.headline(for: Fixture.state(plans: [Fixture.plan(), data], runs: runs))
         #expect(headline.title == "„Daten“ seit 3 Tagen nicht gesichert")
-        #expect(headline.subtitle == "Zuletzt gesichert: So., 11.10., 03:00")
+        #expect(headline.subtitle == "Zuletzt gesichert: So., 11.10., 03:03")
     }
 
     @Test func overdueCountsHoursBelowTwoDays() {
@@ -180,7 +180,7 @@ struct StatusTextTests {
     @Test func aHealthyPlanRowSaysOnlyWhenItWasBackedUp() {
         #expect(
             text.summary(of: Fixture.plan(), in: Fixture.state(runs: [Fixture.backup(at: lastHour)]))
-                == "Gesichert heute, 13:02")
+                == "Gesichert heute, 13:05")
     }
 
     @Test func aFailedPlanRowLeadsWithTheReason() {
@@ -190,7 +190,7 @@ struct StatusTextTests {
         ]
         #expect(
             text.summary(of: data, in: Fixture.state(plans: [data], runs: runs))
-                == "Storage Box nicht erreichbar · zuletzt gesichert gestern, 03:00")
+                == "Storage Box nicht erreichbar · zuletzt gesichert gestern, 03:03")
     }
 
     @Test func anOverduePlanRowCarriesTheCause() {
@@ -213,7 +213,7 @@ struct StatusTextTests {
         let manual = Fixture.plan(automatic: false)
         #expect(
             text.summary(of: manual, in: Fixture.state(plans: [manual], runs: [Fixture.backup(at: lastHour)]))
-                == "Nur manuell · gesichert heute, 13:02")
+                == "Nur manuell · gesichert heute, 13:05")
         #expect(text.summary(of: manual, in: Fixture.state(plans: [manual])) == "Nur manuell · noch nie gesichert")
 
         let noTarget = Fixture.plan(targetID: nil)
@@ -224,14 +224,14 @@ struct StatusTextTests {
             at: lastHour, monitorPush: MonitorPush(sentAt: Fixture.now, failure: .rejected(statusCode: 404)))
         #expect(
             text.summary(of: kuma, in: Fixture.state(plans: [kuma], runs: [rejected]))
-                == "Meldung an Uptime Kuma fehlgeschlagen · gesichert heute, 13:02")
+                == "Meldung an Uptime Kuma fehlgeschlagen · gesichert heute, 13:05")
     }
 
     @Test func aPlanRowMentionsACatchUpDuringTheGracePeriod() {
         let state = Fixture.state(
             runs: [Fixture.backup(at: Fixture.date(2026, 10, 14, 8, 2))],
             awakeSince: Fixture.now.addingTimeInterval(-60))
-        #expect(text.summary(of: Fixture.plan(), in: state) == "Gesichert heute, 08:02 · wird nachgeholt")
+        #expect(text.summary(of: Fixture.plan(), in: state) == "Gesichert heute, 08:05 · wird nachgeholt")
     }
 
     @Test func targetRows() {
@@ -286,7 +286,7 @@ struct StatusTextTests {
         let header = text.header(for: Fixture.plan(), in: Fixture.state(runs: [Fixture.backup(at: lastHour)]))
         #expect(header.title == "Aktuell")
         #expect(header.symbol == .current)
-        #expect(header.details == ["Zuletzt gesichert: heute, 13:02", "Nächste Sicherung: heute, 14:02"])
+        #expect(header.details == ["Zuletzt gesichert: heute, 13:05", "Nächste Sicherung: heute, 14:02"])
         #expect(header.buttons.map(\.title) == ["Jetzt sichern"])
         #expect(header.buttons.allSatisfy { !$0.isProminent })
     }
@@ -298,7 +298,7 @@ struct StatusTextTests {
             in: Fixture.state(runs: [Fixture.backup(at: lastHour.addingTimeInterval(-3600)), failed]))
         #expect(header.title == "Sicherung fehlgeschlagen")
         #expect(header.message == "Storage Box nicht erreichbar. Netzwerk prüfen – neuer Versuch heute, 13:25.")
-        #expect(header.details == ["Zuletzt gesichert: heute, 12:02"])
+        #expect(header.details == ["Zuletzt gesichert: heute, 12:05"])
         #expect(header.buttons.map(\.action) == [.showRun(failed.id), .start(.backup(Fixture.homeID))])
         #expect(header.buttons.filter(\.isProminent).map(\.title) == ["Erneut versuchen"])
     }
@@ -321,7 +321,7 @@ struct StatusTextTests {
         #expect(header.message == "Das Volume „Daten“ ist nicht angeschlossen.")
         #expect(
             header.details == [
-                "Wird nachgeholt, sobald „Daten“ angeschlossen ist", "Zuletzt gesichert: So., 11.10., 03:00",
+                "Wird nachgeholt, sobald „Daten“ angeschlossen ist", "Zuletzt gesichert: So., 11.10., 03:03",
             ])
         #expect(header.buttons.allSatisfy { !$0.isProminent })
 
@@ -364,7 +364,7 @@ struct StatusTextTests {
         let manualHeader = text.header(
             for: manual, in: Fixture.state(plans: [manual], runs: [Fixture.backup(at: lastHour)]))
         #expect(manualHeader.title == "Nur manuell")
-        #expect(manualHeader.details == ["Zuletzt gesichert: heute, 13:02"])
+        #expect(manualHeader.details == ["Zuletzt gesichert: heute, 13:05"])
 
         let running = text.header(
             for: Fixture.plan(),

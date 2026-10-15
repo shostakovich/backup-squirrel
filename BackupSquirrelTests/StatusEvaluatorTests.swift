@@ -45,6 +45,11 @@ struct StatusEvaluatorTests {
         #expect(status.health == .current)
     }
 
+    @Test func aLongBackupCountsFromItsEndNotItsStart() {
+        let fiveHours = Fixture.backup(at: Fixture.now.addingTimeInterval(-5 * 3600), duration: 5 * 3600 - 60)
+        #expect(status(runs: [fiveHours]).health == .current)
+    }
+
     @Test func cancelledBackupsChangeNothing() {
         let snapshot = Fixture.backup(at: lastHour.addingTimeInterval(-3600))
         let status = status(runs: [snapshot, Fixture.backup(status: .cancelled, at: lastHour)])
@@ -61,7 +66,7 @@ struct StatusEvaluatorTests {
     // MARK: Overdue
 
     @Test func overdueOnlyAfterMoreThanTwoIntervalsWithoutSnapshot() {
-        let run = Fixture.backup(at: Fixture.date(2026, 10, 14, 11, 20))
+        let run = Fixture.backup(at: Fixture.date(2026, 10, 14, 11, 17), duration: 180)
         #expect(status(runs: [run]).health == .current)
         #expect(status(runs: [run], now: Fixture.now.addingTimeInterval(1)).health == .overdue)
     }
