@@ -81,7 +81,7 @@ final class AppModel {
         )
         runs.append(run)
         progress = nil
-        let events = executor.execute(job)
+        let events = executor.execute(job).events
         activeTask = Task { [weak self] in
             for await event in events {
                 self?.apply(event, to: run.id)
@@ -262,12 +262,12 @@ final class AppModel {
         guard let plan = plan(planID), plan.reportsToUptimeKuma, !reportingPlans.contains(planID),
             let index = runs.lastIndex(where: { $0.planID == planID && $0.producedSnapshot })
         else { return }
-        let runID = runs[index].id
+        let run = runs[index]
         reportingPlans.insert(planID)
-        let failure = await executor.report(to: plan.uptimeKumaPushURL)
+        let failure = await executor.report(run, of: plan)
         reportingPlans.remove(planID)
         let sentAt = currentDate()
-        update(runID) { $0.monitorPush = MonitorPush(sentAt: sentAt, failure: failure) }
+        update(run.id) { $0.monitorPush = MonitorPush(sentAt: sentAt, failure: failure) }
         now = sentAt
     }
 

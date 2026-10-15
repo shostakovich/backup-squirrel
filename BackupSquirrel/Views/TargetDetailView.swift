@@ -145,7 +145,7 @@ struct TargetDetailView: View {
         connectionTest = .testing
         let target = target
         Task {
-            let result = await SimulatedConnection.test(target)
+            let result = await SimulatedConnection().test(target)
             connectionTest = result
             if result == .succeeded {
                 model.markConnected(target.id)

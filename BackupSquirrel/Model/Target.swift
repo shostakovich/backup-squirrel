@@ -40,7 +40,9 @@ struct Target: Identifiable, Hashable, Sendable {
 
     /// As restic expects it after `--repo`; an absolute path yields the double slash restic wants.
     var repository: String {
-        "sftp://\(user)@\(host):\(port)/\(path)"
+        let user = user.addingPercentEncoding(withAllowedCharacters: .urlUserAllowed) ?? user
+        let path = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        return "sftp://\(user)@\(host):\(port)/\(path)"
     }
 }
 

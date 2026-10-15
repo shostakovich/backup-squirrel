@@ -145,16 +145,16 @@ final class MockRunExecutor: RunExecutor {
     var reportResult: PushFailure?
     private var continuation: AsyncStream<RunEvent>.Continuation?
 
-    func report(to pushURL: String) async -> PushFailure? {
-        reports.append(pushURL)
+    func report(_ run: Run, of plan: Plan) async -> PushFailure? {
+        reports.append(plan.uptimeKumaPushURL)
         return reportResult
     }
 
-    func execute(_ job: RunJob) -> AsyncStream<RunEvent> {
+    func execute(_ job: RunJob) -> RunExecution {
         jobs.append(job)
         let (stream, continuation) = AsyncStream<RunEvent>.makeStream()
         self.continuation = continuation
-        return stream
+        return RunExecution(events: stream) { continuation.finish() }
     }
 
     func send(_ event: RunEvent) {

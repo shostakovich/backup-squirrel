@@ -19,3 +19,6 @@ build/
 
 # Local signing configuration
 Config/Local.xcconfig
+
+# Pinned restic downloaded by Scripts/fetch-restic.sh
+.cache/

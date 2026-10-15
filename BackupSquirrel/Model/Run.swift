@@ -29,6 +29,8 @@ struct BackupStatistics: Hashable, Sendable {
     var bytesProcessed: Int64 = 0
     var snapshotID: String?
     var unreadableFiles: [String] = []
+    /// Removed by the retention that follows the backup; the weekly prune frees their space.
+    var snapshotsForgotten = 0
 }
 
 struct CheckStatistics: Hashable, Sendable {

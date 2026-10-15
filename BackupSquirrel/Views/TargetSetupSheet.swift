@@ -128,7 +128,7 @@ struct TargetSetupSheet: View {
         .task(id: setup.connectionTest) {
             if setup.connectionTest == .idle { testConnection() }
             if setup.connectionTest == .succeeded, setup.repository == .searching {
-                setup.repository = await SimulatedConnection.detectRepository(at: setup.target)
+                setup.repository = await SimulatedConnection().detectRepository(at: setup.target)
             }
         }
     }
@@ -309,7 +309,7 @@ struct TargetSetupSheet: View {
             let password = setup.password
             let target = setup.target
             Task {
-                let matches = await SimulatedConnection.verifyPassword(password, for: target)
+                let matches = await SimulatedConnection().verifyPassword(password, for: target) == .matches
                 guard setup.password == password else { return }
                 setup.passwordCheck = matches ? .idle : .wrong
                 if matches { setup.goForward() }
@@ -348,7 +348,7 @@ struct TargetSetupSheet: View {
         setup.repository = .searching
         let target = setup.target
         Task {
-            setup.finishConnectionTest(await SimulatedConnection.test(target))
+            setup.finishConnectionTest(await SimulatedConnection().test(target))
         }
     }
 }

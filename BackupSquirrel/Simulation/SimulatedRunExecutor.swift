@@ -16,38 +16,38 @@ final class SimulatedRunExecutor: RunExecutor {
         self.tick = tick
     }
 
-    func execute(_ job: RunJob) -> AsyncStream<RunEvent> {
+    func execute(_ job: RunJob) -> RunExecution {
         let profile = Self.profile(for: job)
         let start = resumeProgress ?? Self.progress(filesDone: 0, profile: profile)
         resumeProgress = nil
         let tickSeconds = Double(tick.components.seconds) + Double(tick.components.attoseconds) / 1e18
         let tick = self.tick
-        return AsyncStream { continuation in
-            let task = Task { @MainActor in
-                var progress = start
-                let startedAt = Date()
+        let (events, continuation) = AsyncStream<RunEvent>.makeStream()
+        let task = Task { @MainActor in
+            var progress = start
+            let startedAt = Date()
+            continuation.yield(.progress(progress))
+            while progress.filesDone < progress.filesTotal {
+                do {
+                    try await Task.sleep(for: tick)
+                } catch {
+                    break
+                }
+                let filesDone = min(
+                    progress.filesTotal, progress.filesDone + Int(profile.filesPerSecond * tickSeconds))
+                progress = Self.progress(filesDone: filesDone, profile: profile)
                 continuation.yield(.progress(progress))
-                while progress.filesDone < progress.filesTotal {
-                    do {
-                        try await Task.sleep(for: tick)
-                    } catch {
-                        break
-                    }
-                    let filesDone = min(
-                        progress.filesTotal, progress.filesDone + Int(profile.filesPerSecond * tickSeconds))
-                    progress = Self.progress(filesDone: filesDone, profile: profile)
-                    continuation.yield(.progress(progress))
-                }
-                if !Task.isCancelled {
-                    continuation.yield(.finished(Self.outcome(for: job, duration: Date().timeIntervalSince(startedAt))))
-                }
-                continuation.finish()
             }
-            continuation.onTermination = { _ in task.cancel() }
+            if !Task.isCancelled {
+                continuation.yield(.finished(Self.outcome(for: job, duration: Date().timeIntervalSince(startedAt))))
+            }
+            continuation.finish()
         }
+        continuation.onTermination = { _ in task.cancel() }
+        return RunExecution(events: events, stop: { task.cancel() })
     }
 
-    func report(to pushURL: String) async -> PushFailure? {
+    func report(_ run: Run, of plan: Plan) async -> PushFailure? {
         try? await Task.sleep(for: .milliseconds(600))
         return nil
     }
