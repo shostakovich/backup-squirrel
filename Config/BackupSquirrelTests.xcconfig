@@ -1,0 +1,6 @@
+PRODUCT_NAME = BackupSquirrelTests
+PRODUCT_BUNDLE_IDENTIFIER = de.rocu.BackupSquirrelTests
+GENERATE_INFOPLIST_FILE = YES
+TEST_HOST = $(BUILT_PRODUCTS_DIR)/Backup-Squirrel.app/Contents/MacOS/Backup-Squirrel
+BUNDLE_LOADER = $(TEST_HOST)
+LD_RUNPATH_SEARCH_PATHS = $(inherited) @executable_path/../Frameworks @loader_path/../Frameworks

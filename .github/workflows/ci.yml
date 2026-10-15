@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select the latest Xcode
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -n 1)
+          sudo xcode-select --switch "$xcode"
+          xcodebuild -version
+
+      - name: Lint
+        run: xcrun swift-format lint --strict --recursive .
+
+      - name: Build
+        run: >
+          xcodebuild -project BackupSquirrel.xcodeproj -scheme BackupSquirrel -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO build
+
+      - name: Test
+        run: >
+          xcodebuild -project BackupSquirrel.xcodeproj -scheme BackupSquirrel -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO test

@@ -1,0 +1,292 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXContainerItemProxy section */
+		5B0000000000000000000060 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 5B0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5B0000000000000000000040;
+			remoteInfo = BackupSquirrel;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		5B0000000000000000000020 /* Backup-Squirrel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Backup-Squirrel.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B0000000000000000000021 /* BackupSquirrelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = BackupSquirrelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5B0000000000000000000030 /* Shared.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Shared.xcconfig; sourceTree = "<group>"; };
+		5B0000000000000000000031 /* BackupSquirrel.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = BackupSquirrel.xcconfig; sourceTree = "<group>"; };
+		5B0000000000000000000032 /* BackupSquirrelTests.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = BackupSquirrelTests.xcconfig; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		5B0000000000000000000010 /* BackupSquirrel */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BackupSquirrel;
+			sourceTree = "<group>";
+		};
+		5B0000000000000000000011 /* BackupSquirrelTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = BackupSquirrelTests;
+			sourceTree = "<group>";
+		};
+/* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5B0000000000000000000051 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5B0000000000000000000054 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5B0000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				5B0000000000000000000004 /* Config */,
+				5B0000000000000000000010 /* BackupSquirrel */,
+				5B0000000000000000000011 /* BackupSquirrelTests */,
+				5B0000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5B0000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5B0000000000000000000020 /* Backup-Squirrel.app */,
+				5B0000000000000000000021 /* BackupSquirrelTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5B0000000000000000000004 /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				5B0000000000000000000030 /* Shared.xcconfig */,
+				5B0000000000000000000031 /* BackupSquirrel.xcconfig */,
+				5B0000000000000000000032 /* BackupSquirrelTests.xcconfig */,
+			);
+			path = Config;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5B0000000000000000000040 /* BackupSquirrel */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5B0000000000000000000071 /* Build configuration list for PBXNativeTarget "BackupSquirrel" */;
+			buildPhases = (
+				5B0000000000000000000050 /* Sources */,
+				5B0000000000000000000051 /* Frameworks */,
+				5B0000000000000000000052 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				5B0000000000000000000010 /* BackupSquirrel */,
+			);
+			name = BackupSquirrel;
+			packageProductDependencies = (
+			);
+			productName = BackupSquirrel;
+			productReference = 5B0000000000000000000020 /* Backup-Squirrel.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5B0000000000000000000041 /* BackupSquirrelTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5B0000000000000000000072 /* Build configuration list for PBXNativeTarget "BackupSquirrelTests" */;
+			buildPhases = (
+				5B0000000000000000000053 /* Sources */,
+				5B0000000000000000000054 /* Frameworks */,
+				5B0000000000000000000055 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5B0000000000000000000061 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5B0000000000000000000011 /* BackupSquirrelTests */,
+			);
+			name = BackupSquirrelTests;
+			packageProductDependencies = (
+			);
+			productName = BackupSquirrelTests;
+			productReference = 5B0000000000000000000021 /* BackupSquirrelTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5B0000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2700;
+				LastUpgradeCheck = 2700;
+				TargetAttributes = {
+					5B0000000000000000000040 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					5B0000000000000000000041 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 5B0000000000000000000040;
+					};
+				};
+			};
+			buildConfigurationList = 5B0000000000000000000070 /* Build configuration list for PBXProject "BackupSquirrel" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				de,
+				Base,
+			);
+			mainGroup = 5B0000000000000000000002;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 5B0000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5B0000000000000000000040 /* BackupSquirrel */,
+				5B0000000000000000000041 /* BackupSquirrelTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5B0000000000000000000052 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5B0000000000000000000055 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5B0000000000000000000050 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		5B0000000000000000000053 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		5B0000000000000000000061 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5B0000000000000000000040 /* BackupSquirrel */;
+			targetProxy = 5B0000000000000000000060 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		5B0000000000000000000080 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000030 /* Shared.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		5B0000000000000000000081 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000030 /* Shared.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		5B0000000000000000000082 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000031 /* BackupSquirrel.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		5B0000000000000000000083 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000031 /* BackupSquirrel.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+		5B0000000000000000000084 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000032 /* BackupSquirrelTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Debug;
+		};
+		5B0000000000000000000085 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 5B0000000000000000000032 /* BackupSquirrelTests.xcconfig */;
+			buildSettings = {
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5B0000000000000000000070 /* Build configuration list for PBXProject "BackupSquirrel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B0000000000000000000080 /* Debug */,
+				5B0000000000000000000081 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5B0000000000000000000071 /* Build configuration list for PBXNativeTarget "BackupSquirrel" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B0000000000000000000082 /* Debug */,
+				5B0000000000000000000083 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5B0000000000000000000072 /* Build configuration list for PBXNativeTarget "BackupSquirrelTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5B0000000000000000000084 /* Debug */,
+				5B0000000000000000000085 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5B0000000000000000000001 /* Project object */;
+}
