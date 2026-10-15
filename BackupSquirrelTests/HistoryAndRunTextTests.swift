@@ -163,4 +163,25 @@ struct SSHKeyTests {
         let custom = Fixture.target(port: 2222)
         #expect(custom.sshKey.installCommand(for: custom).contains("ssh -p2222 "))
     }
+
+    @Test func theRepositoryAddressPercentEncodesThePathAsResticDecodesIt() {
+        var target = Fixture.target()
+        target.path = "my#repo?x a%20b"
+        #expect(target.repository == "sftp://u123456-sub1@u123456.your-storagebox.de:23/my%23repo%3Fx%20a%2520b")
+    }
+
+    @Test func connectionFieldsAreTrimmedAndMustNotContainControlCharacters() {
+        var target = Fixture.target()
+        target.host = " u1.example \n"
+        target.user = "\tu1"
+        target.path = " /home/restic "
+        #expect(target.hasValidConnection)
+        let trimmed = target.trimmingConnection()
+        #expect([trimmed.host, trimmed.user, trimmed.path] == ["u1.example", "u1", "/home/restic"])
+        target.path = "backups\n!ls"
+        #expect(!target.hasValidConnection)
+        target.path = ""
+        target.user = "  "
+        #expect(!target.hasValidConnection)
+    }
 }

@@ -166,7 +166,7 @@ struct StatusText {
             guard let plan = state.plan(id) else { return ("", nil) }
             let status = evaluator.status(of: plan, in: state)
             let name = GermanFormat.quoted(plan.name)
-            let lastSnapshot = status.lastSnapshot.map { "Zuletzt gesichert: \(moment($0.startedAt, state))" }
+            let lastSnapshot = status.lastSnapshot.map { "Zuletzt gesichert: \(moment($0.endedAt, state))" }
             switch status.health {
             case .overdue:
                 guard status.lastSnapshot != nil else { return ("\(name) noch nie gesichert", nil) }
@@ -211,7 +211,7 @@ struct StatusText {
         guard automatic.count == 1, let plan = automatic.first,
             let snapshot = evaluator.status(of: plan, in: state).lastSnapshot
         else { return nil }
-        return "Zuletzt gesichert: \(moment(snapshot.startedAt, state))"
+        return "Zuletzt gesichert: \(moment(snapshot.endedAt, state))"
     }
 
     private func problemCount(_ problems: [Problem]) -> String {
@@ -380,14 +380,14 @@ struct StatusText {
 
     func summary(of plan: Plan, in state: BackupState) -> String {
         let status = evaluator.status(of: plan, in: state)
-        let backedUp = status.lastSnapshot.map { "gesichert \(moment($0.startedAt, state))" } ?? "noch nie gesichert"
+        let backedUp = status.lastSnapshot.map { "gesichert \(moment($0.endedAt, state))" } ?? "noch nie gesichert"
         switch status.health {
         case .running:
             return state.progress.map { "Wird gesichert – \(GermanFormat.percent($0.fractionCompleted))" }
                 ?? "Wird gesichert …"
         case .incomplete:
             guard let snapshot = status.lastSnapshot else { return gapText(status.gap) }
-            return "\(gapText(status.gap)) · zuletzt gesichert \(moment(snapshot.startedAt, state))"
+            return "\(gapText(status.gap)) · zuletzt gesichert \(moment(snapshot.endedAt, state))"
         case .overdue:
             let since = RelativeDateText.capitalized(notBackedUpFor(status, state))
             return [since, standstillPhrase(status.standstill, state)].compactMap { $0 }.joined(separator: " · ")
@@ -460,7 +460,7 @@ struct StatusText {
     func header(for plan: Plan, in state: BackupState) -> StatusHeader {
         let status = evaluator.status(of: plan, in: state)
         let symbol = symbol(for: status.health)
-        let lastSnapshot = "Zuletzt gesichert: \(status.lastSnapshot.map { moment($0.startedAt, state) } ?? "noch nie")"
+        let lastSnapshot = "Zuletzt gesichert: \(status.lastSnapshot.map { moment($0.endedAt, state) } ?? "noch nie")"
         let next = status.nextRun.map { nextRunLine($0, state) }
         let backUpNow = StatusHeader.Button(action: .start(.backup(plan.id)), title: "Jetzt sichern")
         let retry = StatusHeader.Button(
@@ -633,7 +633,7 @@ struct StatusText {
     /// "seit 3 Tagen nicht gesichert": days from two days on, hours below.
     func notBackedUpFor(_ status: PlanStatus, _ state: BackupState) -> String {
         guard let snapshot = status.lastSnapshot else { return "noch nie gesichert" }
-        let elapsed = state.now.timeIntervalSince(snapshot.startedAt)
+        let elapsed = state.now.timeIntervalSince(snapshot.endedAt)
         if elapsed >= 2 * 24 * 3600 { return "seit \(Int(elapsed / (24 * 3600))) Tagen nicht gesichert" }
         let hours = Int(elapsed / 3600)
         return hours == 1 ? "seit 1 Stunde nicht gesichert" : "seit \(hours) Stunden nicht gesichert"

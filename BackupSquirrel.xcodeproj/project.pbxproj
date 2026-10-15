@@ -94,6 +94,7 @@
 				5B0000000000000000000050 /* Sources */,
 				5B0000000000000000000051 /* Frameworks */,
 				5B0000000000000000000052 /* Resources */,
+				5B0000000000000000000056 /* Bundle restic */,
 			);
 			buildRules = (
 			);
@@ -187,6 +188,30 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		5B0000000000000000000056 /* Bundle restic */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/Scripts/fetch-restic.sh",
+			);
+			name = "Bundle restic";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(SRCROOT)/.cache/restic/restic-0.19.1",
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/restic",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -eu\n\"$SRCROOT/Scripts/fetch-restic.sh\" \"$SCRIPT_OUTPUT_FILE_0\"\ncp -f \"$SCRIPT_OUTPUT_FILE_0\" \"$SCRIPT_OUTPUT_FILE_1\"\nif [ \"${CODE_SIGNING_ALLOWED:-YES}\" = YES ]; then\n    codesign --force --options runtime --identifier \"$PRODUCT_BUNDLE_IDENTIFIER.restic\" --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" \"$SCRIPT_OUTPUT_FILE_1\"\nfi\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		5B0000000000000000000050 /* Sources */ = {

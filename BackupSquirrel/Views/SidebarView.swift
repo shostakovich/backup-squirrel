@@ -146,7 +146,7 @@ struct SidebarView: View {
     }
 
     private func addTarget() {
-        router.targetSetup = TargetSetup(target: model.makeTargetDraft(), isOnboarding: model.plans.isEmpty)
+        router.targetSetup = model.makeTargetSetup()
     }
 
     private func beginRenaming(_ item: SidebarItem) {

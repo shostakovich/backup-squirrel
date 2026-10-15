@@ -1,6 +1,6 @@
 import Foundation
 
-struct Plan: Identifiable, Hashable, Sendable {
+struct Plan: Identifiable, Hashable, Sendable, Codable {
     let id: UUID
     var name: String
     var targetID: Target.ID?

@@ -6,7 +6,7 @@ enum RunKind: String, CaseIterable, Hashable, Sendable {
     case prune
 }
 
-enum RunStatus: Hashable, Sendable {
+enum RunStatus: String, Hashable, Sendable, Codable {
     case running
     case success
     /// The snapshot exists, but some files could not be read.
@@ -19,9 +19,12 @@ enum RunStatus: Hashable, Sendable {
 enum RunFailure: Hashable, Sendable {
     case targetUnreachable
     case other(String)
+
+    /// Counts as a failure, so the retry or catch-up is due right after the next launch.
+    static let interrupted = RunFailure.other("Backup-Squirrel wurde beendet, während der Vorgang lief")
 }
 
-struct BackupStatistics: Hashable, Sendable {
+struct BackupStatistics: Hashable, Sendable, Codable {
     var filesNew = 0
     var filesChanged = 0
     var filesUnmodified = 0
@@ -29,9 +32,11 @@ struct BackupStatistics: Hashable, Sendable {
     var bytesProcessed: Int64 = 0
     var snapshotID: String?
     var unreadableFiles: [String] = []
+    /// Removed by the retention that follows the backup; the weekly prune frees their space.
+    var snapshotsForgotten = 0
 }
 
-struct CheckStatistics: Hashable, Sendable {
+struct CheckStatistics: Hashable, Sendable, Codable {
     static let subsetCount = 12
 
     /// 1-based index of the slice passed to `restic check --read-data-subset=n/12`.
@@ -39,7 +44,7 @@ struct CheckStatistics: Hashable, Sendable {
     var errorCount = 0
 }
 
-struct PruneStatistics: Hashable, Sendable {
+struct PruneStatistics: Hashable, Sendable, Codable {
     var snapshotsRemoved = 0
     var bytesFreed: Int64 = 0
 }
@@ -58,17 +63,17 @@ enum RunDetails: Hashable, Sendable {
     }
 }
 
-enum PushFailure: Hashable, Sendable {
+enum PushFailure: Hashable, Sendable, Codable {
     case rejected(statusCode: Int)
     case unreachable
 }
 
-struct MonitorPush: Hashable, Sendable {
+struct MonitorPush: Hashable, Sendable, Codable {
     var sentAt: Date
     var failure: PushFailure?
 }
 
-struct Run: Identifiable, Hashable, Sendable {
+struct Run: Identifiable, Hashable, Sendable, Codable {
     let id: UUID
     /// Set for backups only; checks and prunes belong to a target.
     var planID: Plan.ID?
@@ -106,6 +111,9 @@ struct Run: Identifiable, Hashable, Sendable {
     }
 
     var kind: RunKind { details.kind }
+
+    /// When the run ended; a backup counts as saved from then on.
+    var endedAt: Date { finishedAt ?? startedAt }
 
     var duration: TimeInterval? {
         finishedAt.map { $0.timeIntervalSince(startedAt) }

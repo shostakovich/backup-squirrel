@@ -145,16 +145,24 @@ final class MockRunExecutor: RunExecutor {
     var reportResult: PushFailure?
     private var continuation: AsyncStream<RunEvent>.Continuation?
 
-    func report(to pushURL: String) async -> PushFailure? {
-        reports.append(pushURL)
+    func report(_ run: Run, of plan: Plan) async -> PushFailure? {
+        reports.append(plan.uptimeKumaPushURL)
         return reportResult
     }
 
-    func execute(_ job: RunJob) -> AsyncStream<RunEvent> {
+    private(set) var stops = 0
+    /// False makes a stopped job wait for `finish`, as restic takes a while to exit.
+    var endsWhenStopped = true
+
+    func execute(_ job: RunJob) -> RunExecution {
         jobs.append(job)
         let (stream, continuation) = AsyncStream<RunEvent>.makeStream()
         self.continuation = continuation
-        return stream
+        return RunExecution(events: stream) { [weak self] in
+            guard let self else { return }
+            stops += 1
+            if endsWhenStopped { continuation.finish() }
+        }
     }
 
     func send(_ event: RunEvent) {

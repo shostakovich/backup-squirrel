@@ -31,11 +31,14 @@ enum RunEvent: Hashable, Sendable {
     case finished(RunOutcome)
 }
 
-/// Performs one job; cancelling the consumer of the stream cancels the job.
+/// `stop` ends the job early; its events still run to the end, so the run is recorded only once restic is gone.
+struct RunExecution {
+    var events: AsyncStream<RunEvent>
+    var stop: @MainActor () -> Void
+}
+
 @MainActor
 protocol RunExecutor: AnyObject {
-    func execute(_ job: RunJob) -> AsyncStream<RunEvent>
-
-    /// Sends the Uptime Kuma push for a plan's last snapshot again.
-    func report(to pushURL: String) async -> PushFailure?
+    func execute(_ job: RunJob) -> RunExecution
+    func report(_ run: Run, of plan: Plan) async -> PushFailure?
 }

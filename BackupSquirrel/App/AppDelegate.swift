@@ -8,6 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var notificationController: NotificationController?
     private var mainWindowController: MainWindowController?
     private var mainMenuController: MainMenuController?
+    private var persistence: ModelPersistence?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         guard !Self.isHostingTests else { return }
@@ -21,7 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #endif
 
         SystemServices.registerLoginItemIfInstalled()
-        let model = Self.makeModel()
+        let (model, storeProblems) = makeModel()
         model.startClock()
         self.model = model
         let mainMenuController = MainMenuController { [weak self] in
@@ -38,15 +39,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             model: model, store: NotifiedAlerts(defaults: .standard),
             perform: { [weak self] action in self?.perform(action) },
             run: { [weak self] command in self?.run(command) })
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
-        ) { [weak model] _ in
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak model] _ in
             MainActor.assumeIsolated { model?.noteWake() }
+        }
+        for name in [NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
+            workspace.addObserver(forName: name, object: nil, queue: .main) { [weak model] _ in
+                MainActor.assumeIsolated { model?.refreshSystem() }
+            }
         }
         Task {
             await SystemServices.refreshNotificationPermission()
             model.refreshSystem()
         }
+        if persistence != nil { model.startScheduling() }
+        if !storeProblems.isEmpty { Self.report(storeProblems) }
         if model.targets.isEmpty { perform(.setUp) }
         #if DEBUG
             if let name = UserDefaults.standard.string(forKey: "openWindow") {
@@ -61,6 +68,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await SystemServices.refreshNotificationPermission()
             model.refreshSystem()
         }
+    }
+
+    /// restic gets SIGINT to remove its lock, and the history is written before the app goes.
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model, model.isBusy else {
+            persistence?.flush()
+            return .terminateNow
+        }
+        Task {
+            await model.shutDown(waitingAtMost: .seconds(20))
+            persistence?.flush()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
@@ -109,7 +130,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             router.renaming = .plan(id)
         case .newTarget:
             showWindow(router.selection)
-            router.targetSetup = TargetSetup(target: model.makeTargetDraft(), isOnboarding: model.plans.isEmpty)
+            router.targetSetup = model.makeTargetSetup()
         case .rename:
             if router.selection != .history { router.renaming = router.selection }
         case .delete:
@@ -137,7 +158,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .noTarget:
             showWindow(router.selection)
             if router.targetSetup == nil {
-                router.targetSetup = TargetSetup(target: model.makeTargetDraft(), isOnboarding: model.plans.isEmpty)
+                router.targetSetup = model.makeTargetSetup()
             }
         case .noPlan:
             let id = model.addPlan()
@@ -160,15 +181,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ProcessInfo.processInfo.environment.keys.contains { $0.hasPrefix("XCTest") }
     }
 
-    /// A chosen scenario also simulates the state of this Mac; otherwise this Mac is asked.
-    private static func makeModel() -> AppModel {
+    /// A chosen scenario simulates everything, this Mac included; otherwise the saved state is backed up for real.
+    private func makeModel() -> (AppModel, [StoreProblem]) {
         #if DEBUG
             if let name = UserDefaults.standard.string(forKey: "scenario"),
                 let scenario = SampleScenario(rawValue: name)
             {
-                return scenario.makeModel()
+                return (scenario.makeModel(), [])
             }
         #endif
-        return SampleScenario.running.makeModel(inspectSystem: SystemServices.inspect)
+        let paths = AppPaths.standard
+        let store = BackupStore(directory: paths.applicationSupport)
+        let loaded = store.load(now: Date())
+        let hostName = loaded.configuration?.hostName ?? HostName.ofThisMac()
+        let passwords = KeychainPasswordStore()
+        let restic = Restic.bundled(paths: paths)
+        let model = AppModel(
+            targets: loaded.configuration?.targets ?? [],
+            plans: loaded.configuration?.plans ?? [],
+            runs: loaded.runs,
+            passwords: passwords,
+            connection: ResticConnection(restic: restic),
+            keys: SSHKeyStore(paths: paths),
+            inspectSystem: SystemServices.inspect,
+            executor: ResticRunExecutor(restic: restic, passwords: passwords, hostName: hostName)
+        )
+        persistence = ModelPersistence(
+            model: model, store: store, hostName: hostName, savesConfiguration: loaded.savesConfiguration,
+            savesHistory: loaded.savesHistory)
+        return (model, loaded.problems)
+    }
+
+    private static func report(_ problems: [StoreProblem]) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Gespeicherte Daten nicht lesbar"
+        alert.informativeText =
+            "Backup-Squirrel konnte diese Dateien nicht lesen:\n\n\(BackupStore.report(problems))\n\n"
+            + "Ziele, Pläne oder der Verlauf fehlen deshalb."
+        NSApp.activate()
+        alert.runModal()
     }
 }

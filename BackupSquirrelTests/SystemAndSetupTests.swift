@@ -84,10 +84,11 @@ struct RepositoryPasswordTests {
 @MainActor
 struct TargetSetupTests {
     private func setup(onboarding: Bool = false) -> TargetSetup {
-        TargetSetup(target: Fixture.target(), isOnboarding: onboarding)
+        TargetSetup(
+            target: Fixture.target(), isOnboarding: onboarding, connection: MockConnection(), keys: MockKeys())
     }
 
-    @Test func walksThroughTheStepsOnlyWhenEachIsComplete() {
+    @Test func walksThroughTheStepsOnlyWhenEachIsComplete() async {
         let setup = setup()
         #expect(setup.progressText == "Schritt 1 von 5")
         setup.target.host = ""
@@ -95,6 +96,8 @@ struct TargetSetupTests {
         setup.target.host = "u123456.your-storagebox.de"
         setup.goForward()
         #expect(setup.step == .key)
+        #expect(!setup.canContinue)
+        await setup.generateKey()
         setup.goForward()
         #expect(setup.step == .test)
         #expect(!setup.canContinue)
@@ -128,6 +131,29 @@ struct TargetSetupTests {
         setup.password = "anders"
         #expect(!setup.isPasswordStored)
         #expect(!setup.canContinue)
+    }
+
+    @Test(arguments: [" geheim", "geheim ", "geh\neim"])
+    func aPasswordResticWouldReadDifferentlyIsRefused(password: String) {
+        let setup = setup()
+        setup.step = .password
+        setup.repository = .found(snapshots: 37)
+        setup.password = password
+        #expect(setup.passwordProblem != nil)
+        #expect(!setup.canContinue)
+        setup.password = "ge heim"
+        #expect(setup.passwordProblem == nil)
+        #expect(setup.canContinue)
+    }
+
+    @Test func theConnectionIsTrimmedWhenTheStepIsDone() {
+        let setup = setup()
+        setup.target.host = " u1.example "
+        setup.target.path = "backups\n"
+        setup.goForward()
+        #expect(setup.step == .key)
+        #expect(setup.target.host == "u1.example")
+        #expect(setup.target.path == "backups")
     }
 
     @Test func theExistingRepositorysPasswordIsCheckedAndAWrongOneIsSaid() {

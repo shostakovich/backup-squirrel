@@ -1,6 +1,6 @@
 import Foundation
 
-struct Target: Identifiable, Hashable, Sendable {
+struct Target: Identifiable, Hashable, Sendable, Codable {
     static let defaultPort = 23
 
     let id: UUID
@@ -40,11 +40,28 @@ struct Target: Identifiable, Hashable, Sendable {
 
     /// As restic expects it after `--repo`; an absolute path yields the double slash restic wants.
     var repository: String {
-        "sftp://\(user)@\(host):\(port)/\(path)"
+        let user = user.addingPercentEncoding(withAllowedCharacters: .urlUserAllowed) ?? user
+        let path = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? path
+        return "sftp://\(user)@\(host):\(port)/\(path)"
+    }
+
+    /// A control character in a field would split the sftp batch commands the setup sends.
+    var hasValidConnection: Bool {
+        let fields = [host, user, path].map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return !fields[0].isEmpty && !fields[1].isEmpty && (1...65_535).contains(port)
+            && !fields.contains { $0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }
+    }
+
+    func trimmingConnection() -> Target {
+        var target = self
+        target.host = host.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.user = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        target.path = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        return target
     }
 }
 
-struct SSHKey: Hashable, Sendable {
+struct SSHKey: Hashable, Sendable, Codable {
     var publicKey: String
     /// Relative to the home directory.
     var publicKeyPath: String

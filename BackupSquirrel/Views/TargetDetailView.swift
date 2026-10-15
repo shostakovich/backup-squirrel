@@ -46,7 +46,7 @@ struct TargetDetailView: View {
         .navigationTitle(target.name)
         .navigationSubtitle(text.windowSubtitle(for: target, in: state))
         .sheet(isPresented: $isChangingPassword) {
-            ChangePasswordSheet { password in model.setRepositoryPassword(password, for: target.id) }
+            ChangePasswordSheet { password in await model.changeRepositoryPassword(of: target.id, to: password) }
         }
         .sheet(isPresented: $isEditingConnection) {
             ConnectionEditSheet(target: target) { edited in
@@ -143,32 +143,29 @@ struct TargetDetailView: View {
 
     private func testConnection() {
         connectionTest = .testing
-        let target = target
+        let id = target.id
         Task {
-            let result = await SimulatedConnection.test(target)
-            connectionTest = result
-            if result == .succeeded {
-                model.markConnected(target.id)
-                connectionTest = .idle
-            }
+            let result = await model.testConnection(of: id)
+            connectionTest = result == .succeeded ? .idle : result
         }
     }
 
     // MARK: Password
 
     private var passwordSection: some View {
-        let password = model.repositoryPassword(for: target.id)
+        let isStored = model.hasRepositoryPassword(for: target.id)
+        let id = target.id
         return Section {
             HStack(spacing: 8) {
                 Text("Passwort")
                 Spacer(minLength: 12)
-                Text(password == nil ? "Nicht gespeichert" : "Im Schlüsselbund gespeichert")
+                Text(isStored ? "Im Schlüsselbund gespeichert" : "Nicht gespeichert")
                     .foregroundStyle(.secondary)
                     .fixedSize()
-                if let password {
-                    CopyButton(value: password, help: "Passwort kopieren")
+                if isStored {
+                    CopyButton(value: model.repositoryPassword(for: id) ?? "", help: "Passwort kopieren")
                 }
-                Button(password == nil ? "Festlegen …" : "Ändern …") { isChangingPassword = true }
+                Button(isStored ? "Ändern …" : "Festlegen …") { isChangingPassword = true }
             }
         } header: {
             Text("Repository-Passwort")
@@ -237,15 +234,22 @@ struct ConnectionTestResultView<Idle: View>: View {
 }
 
 struct CopyButton: View {
-    let value: String
-    var title = "Kopieren"
+    /// Read only when copying, so a password stays in the Keychain until then.
+    let value: () -> String
+    let title: String
     let help: String
     @State private var isCopied = false
+
+    init(value: @autoclosure @escaping () -> String, title: String = "Kopieren", help: String) {
+        self.value = value
+        self.title = title
+        self.help = help
+    }
 
     var body: some View {
         Button(isCopied ? "Kopiert" : title) {
             NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(value, forType: .string)
+            NSPasteboard.general.setString(value(), forType: .string)
             isCopied = true
             Task {
                 try? await Task.sleep(for: .seconds(2))
@@ -307,11 +311,11 @@ struct ConnectionEditSheet: View {
                 Button("Abbrechen", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Übernehmen") {
-                    save(target)
+                    save(target.trimmingConnection())
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(target.host.isEmpty || target.user.isEmpty || !(1...65_535).contains(target.port))
+                .disabled(!target.hasValidConnection)
             }
             .padding([.horizontal, .bottom], 20)
         }
@@ -320,10 +324,13 @@ struct ConnectionEditSheet: View {
 }
 
 struct ChangePasswordSheet: View {
-    let save: (String) -> Void
+    /// Returns what went wrong; the sheet stays open then.
+    let save: (String) async -> String?
     @Environment(\.dismiss) private var dismiss
     @State private var password = ""
     @State private var confirmation = ""
+    @State private var isSaving = false
+    @State private var failure: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -331,6 +338,20 @@ struct ChangePasswordSheet: View {
                 Section {
                     SecureField("Neues Passwort", text: $password)
                     SecureField("Wiederholen", text: $confirmation)
+                    if isSaving {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Passwort wird geändert …")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if let failure {
+                        Label {
+                            Text(failure)
+                        } icon: {
+                            StatusSymbolView(symbol: .failure)
+                        }
+                    }
                 } header: {
                     Text("Repository-Passwort ändern")
                 } footer: {
@@ -344,11 +365,16 @@ struct ChangePasswordSheet: View {
                 Button("Abbrechen", role: .cancel) { dismiss() }
                     .keyboardShortcut(.cancelAction)
                 Button("Ändern") {
-                    save(password)
-                    dismiss()
+                    isSaving = true
+                    failure = nil
+                    Task {
+                        failure = await save(password)
+                        isSaving = false
+                        if failure == nil { dismiss() }
+                    }
                 }
                 .keyboardShortcut(.defaultAction)
-                .disabled(password.isEmpty || password != confirmation)
+                .disabled(password.isEmpty || password != confirmation || isSaving)
             }
             .padding([.horizontal, .bottom], 20)
         }
