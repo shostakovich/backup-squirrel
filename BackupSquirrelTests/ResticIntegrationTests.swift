@@ -25,7 +25,7 @@ final class ResticIntegrationTests {
             home: folder, applicationSupport: folder.appending(path: "support"),
             caches: folder.appending(path: "caches"),
             temporary: folder)
-        restic = Restic(binary: binary, paths: paths, access: .local(folder.appending(path: "repo")))
+        restic = Restic(binary: binary, paths: paths, access: .local(folder.appending(path: "repo")), progressFPS: 60)
         passwords.setPassword(Self.password, for: target.id)
     }
 
@@ -206,8 +206,11 @@ final class ResticIntegrationTests {
         }
         #expect(status == 0)
         let environment = lines.withLock { $0 }
-        #expect(environment.map { String($0.prefix { $0 != "=" }) }.sorted() == ["HOME", "PATH", "TMPDIR"])
-        #expect(!environment.contains { $0.contains(Self.password) || $0.contains("RESTIC") })
+        #expect(
+            environment.map { String($0.prefix { $0 != "=" }) }.sorted() == [
+                "HOME", "PATH", "RESTIC_PROGRESS_FPS", "TMPDIR",
+            ])
+        #expect(!environment.contains { $0.contains(Self.password) || $0.contains("from-the-owners-shell") })
     }
 
     @Test func aGeneratedKeyIsPrivateToTheOwner() async throws {
