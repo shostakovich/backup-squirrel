@@ -128,6 +128,7 @@ struct ResticInvocationTests {
         #expect(
             invocation.environment == [
                 "HOME": "/Users/example", "TMPDIR": "/var/folders/xy/T", "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
+                "RESTIC_PROGRESS_FPS": "1",
             ])
         let visible = invocation.arguments + invocation.environment.map { "\($0.key)=\($0.value)" }
         #expect(!visible.contains { $0.contains("secret") })

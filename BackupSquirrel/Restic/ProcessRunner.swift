@@ -90,7 +90,7 @@ private final class SpawnedProcess: Sendable {
         posix_spawnattr_setflags(
             &attributes,
             Int16(POSIX_SPAWN_CLOEXEC_DEFAULT | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK | POSIX_SPAWN_SETPGROUP))
-        posix_spawnattr_set_qos_class_np(&attributes, QOS_CLASS_UTILITY)
+        posix_spawnattr_set_qos_class_np(&attributes, QOS_CLASS_BACKGROUND)
 
         let argv = [invocation.executable.path] + invocation.arguments
         let environment = invocation.environment.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }

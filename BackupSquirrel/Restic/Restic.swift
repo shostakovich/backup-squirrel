@@ -20,6 +20,8 @@ struct Restic: Hashable, Sendable {
     var binary: URL
     var paths: AppPaths
     var access = RepositoryAccess.sftp
+    /// restic's default of 60 status lines per second keeps the app busier than restic.
+    var progressFPS = 1
 
     /// Where the build puts restic; if it is missing, every run fails saying so.
     static func bundled(paths: AppPaths = .standard) -> Restic {
@@ -33,10 +35,12 @@ struct Restic: Hashable, Sendable {
     func invocation(
         _ command: [String], for target: Target, password: String, newPassword: String? = nil
     ) throws -> ProcessInvocation {
-        ProcessInvocation(
+        var environment = ChildEnvironment.minimal(paths: paths)
+        environment["RESTIC_PROGRESS_FPS"] = String(progressFPS)
+        return ProcessInvocation(
             executable: binary,
             arguments: command + (try globalArguments(for: target)),
-            environment: ChildEnvironment.minimal(paths: paths),
+            environment: environment,
             standardInput: Data((password + "\n").utf8),
             extraInput: newPassword.map { Data(($0 + "\n").utf8) }
         )
