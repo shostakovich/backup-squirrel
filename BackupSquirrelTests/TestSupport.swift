@@ -27,7 +27,7 @@ enum Fixture {
     }
 
     static func target(
-        id: UUID = targetID, name: String = "Storage Box", port: Int = 23, createdAt: Date = date(2026, 10, 10)
+        id: UUID = targetID, name: String = "Storage Box", port: Int = 23, createdAt: Date = date(2026, 10, 14)
     ) -> Target {
         Target(
             id: id,
@@ -80,14 +80,15 @@ enum Fixture {
     }
 
     static func check(
-        status: RunStatus = .success, at start: Date, subset: Int = 7, errorCount: Int = 0, failure: RunFailure? = nil
+        status: RunStatus = .success, at start: Date, subset: Int = 7,
+        subsetCount: Int = CheckStatistics.currentSubsetCount, errorCount: Int = 0, failure: RunFailure? = nil
     ) -> Run {
         Run(
             targetID: targetID,
             status: status,
             startedAt: start,
             finishedAt: status == .running ? nil : start.addingTimeInterval(226),
-            details: .check(CheckStatistics(subset: subset, errorCount: errorCount)),
+            details: .check(CheckStatistics(subset: subset, subsetCount: subsetCount, errorCount: errorCount)),
             failure: failure ?? (status == .failed && errorCount == 0 ? .targetUnreachable : nil)
         )
     }
@@ -121,7 +122,7 @@ enum Fixture {
 
     /// Recent checks and prunes, so the target is healthy and only the plans matter.
     static func maintenance() -> [Run] {
-        [check(at: date(2026, 10, 12, 4, 0)), prune(at: date(2026, 10, 11, 5, 0))]
+        [check(at: date(2026, 10, 14, 4, 0)), prune(at: date(2026, 10, 11, 5, 0))]
     }
 
     static func progress(filesDone: Int = 12_345, filesTotal: Int = 28_901, secondsRemaining: TimeInterval? = 1_100)

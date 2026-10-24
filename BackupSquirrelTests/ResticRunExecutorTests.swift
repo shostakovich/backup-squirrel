@@ -169,7 +169,7 @@ struct ResticRunExecutorTests {
             "check": [.exit(0, stdout: [#"{"message_type":"summary","num_errors":0}"#])]
         ])
         let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8), on: runner))
-        #expect(runner.invocation("check")?.arguments.prefix(3) == ["check", "--json", "--read-data-subset=8/12"])
+        #expect(runner.invocation("check")?.arguments.prefix(3) == ["check", "--json", "--read-data-subset=8/128"])
         #expect(outcome.status == .success)
         #expect(outcome.details == .check(CheckStatistics(subset: 8)))
     }

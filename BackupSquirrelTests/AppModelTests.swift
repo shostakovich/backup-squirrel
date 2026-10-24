@@ -142,14 +142,26 @@ struct AppModelTests {
         #expect(model.activeRun?.planID == Fixture.dataID)
     }
 
-    @Test func checksRotateThroughTheTwelveSubsets() {
-        let model = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12)])
+    @Test func checksRotateThroughTheSubsets() {
+        let model = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 128)])
         model.start(.check(Fixture.targetID))
         #expect(executor.jobs == [.check(Fixture.target(), subset: 1)])
 
         let next = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 7)])
         next.start(.check(Fixture.targetID))
         #expect(executor.jobs.last == .check(Fixture.target(), subset: 8))
+    }
+
+    @Test func aCheckAfterTheTwelveSlicesOfOldContinuesWithTheNextOf128() {
+        let old = Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12, subsetCount: 12)
+        makeModel(runs: [old]).start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 13)])
+    }
+
+    @Test func aNewCheckRemembersItIsOneOf128Slices() {
+        let model = makeModel()
+        model.start(.check(Fixture.targetID))
+        #expect(model.runs.last?.details == .check(CheckStatistics(subset: 1, subsetCount: 128)))
     }
 
     @Test func aCheckThatCouldNotRunDoesNotUseUpItsSubset() {

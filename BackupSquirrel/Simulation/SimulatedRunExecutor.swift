@@ -86,9 +86,10 @@ final class SimulatedRunExecutor: RunExecutor {
                 monitorPush: plan.reportsToUptimeKuma ? MonitorPush(sentAt: Date()) : nil
             )
         case .check(_, let subset):
+            let statistics = CheckStatistics(subset: subset)
             return RunOutcome(
-                status: .success, details: .check(CheckStatistics(subset: subset)),
-                output: SampleOutput.check(subset: subset, packs: 412, duration: duration))
+                status: .success, details: .check(statistics),
+                output: SampleOutput.check(statistics, packs: 412, duration: duration))
         case .prune:
             let statistics = PruneStatistics(snapshotsRemoved: 3, bytesFreed: 412_000_000)
             return RunOutcome(status: .success, details: .prune(statistics), output: SampleOutput.prune(statistics))

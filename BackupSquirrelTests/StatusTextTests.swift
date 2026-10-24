@@ -29,7 +29,7 @@ struct StatusTextTests {
             progress: Fixture.progress(filesDone: 206, filesTotal: 0, secondsRemaining: 240))
         check.progress?.fractionCompleted = 0.5
         #expect(text.headline(for: check).title == "Prüft „Storage Box“ – 50 %")
-        #expect(text.headline(for: check).subtitle == "Teil 7 von 12 · noch ca. 4 Min.")
+        #expect(text.headline(for: check).subtitle == "Teil 7 von 128 · noch ca. 4 Min.")
 
         var prune = Fixture.state(runs: [Fixture.prune(status: .running, at: Fixture.now)], progress: check.progress)
         prune.progress?.fractionCompleted = 0.1
@@ -128,7 +128,7 @@ struct StatusTextTests {
 
         let damaged = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), errorCount: 3)
         let errors = text.headline(for: Fixture.state(runs: [Fixture.backup(at: lastHour), damaged]))
-        #expect(errors == ("Fehler in den Sicherungen auf „Storage Box“", "3 Fehler in Teil 7 von 12"))
+        #expect(errors == ("Fehler in den Sicherungen auf „Storage Box“", "3 Fehler in Teil 7 von 128"))
 
         let unreachable = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 13, 10))
         let couldNotRun = text.headline(for: Fixture.state(runs: [Fixture.backup(at: lastHour), unreachable]))
@@ -237,7 +237,7 @@ struct StatusTextTests {
     @Test func targetRows() {
         #expect(
             text.summary(of: Fixture.target(), in: Fixture.state(runs: Fixture.maintenance()))
-                == "Geprüft Mo., 12.10. · keine Fehler")
+                == "Geprüft heute · keine Fehler")
         let old = [Fixture.check(at: Fixture.date(2026, 9, 28, 4, 0))]
         #expect(
             text.summary(of: Fixture.target(), in: Fixture.state(runs: old))
@@ -245,7 +245,7 @@ struct StatusTextTests {
         let damaged = [Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), errorCount: 1)]
         #expect(
             text.summary(of: Fixture.target(), in: Fixture.state(runs: damaged))
-                == "1 Fehler in Teil 7 von 12 · geprüft Mo., 12.10.")
+                == "1 Fehler in Teil 7 von 128 · geprüft Mo., 12.10.")
         let unreachable = [
             Fixture.check(at: Fixture.date(2026, 10, 5, 4, 0)),
             Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 13, 10)),
@@ -279,7 +279,7 @@ struct StatusTextTests {
         #expect(text.windowSubtitle(for: fourHours, in: state) == "Alle 4 Stunden auf „Storage Box“")
         #expect(text.windowSubtitle(for: Fixture.plan(automatic: false), in: state) == "Nur manuell")
         #expect(text.windowSubtitle(for: Fixture.plan(targetID: nil), in: state) == "Stündlich, kein Ziel ausgewählt")
-        #expect(text.windowSubtitle(for: Fixture.target(), in: state) == "Wöchentliche Prüfung")
+        #expect(text.windowSubtitle(for: Fixture.target(), in: state) == "Tägliche Prüfung")
     }
 
     @Test func headerOfAHealthyPlan() {
@@ -387,7 +387,10 @@ struct StatusTextTests {
     @Test func headerOfAHealthyTarget() {
         let header = text.header(for: Fixture.target(), in: Fixture.state(runs: Fixture.maintenance()))
         #expect(header.title == "Keine Fehler gefunden")
-        #expect(header.details == ["Teil 7 von 12 geprüft am Mo., 12.10.", "Nächste Prüfung: Mo., 19.10."])
+        #expect(header.details == ["Teil 7 von 128 heute geprüft", "Nächste Prüfung: morgen"])
+        let twoDaysAgo = text.header(
+            for: Fixture.target(), in: Fixture.state(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 14, 0))]))
+        #expect(twoDaysAgo.details.first == "Teil 7 von 128 am Mo., 12.10. geprüft")
         #expect(header.buttons.map(\.action) == [.start(.check(Fixture.targetID))])
     }
 
@@ -405,7 +408,7 @@ struct StatusTextTests {
         let damaged = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), errorCount: 3)
         let errors = text.header(for: Fixture.target(), in: Fixture.state(runs: [damaged]))
         #expect(errors.title == "Fehler in den Sicherungen gefunden")
-        #expect(errors.message?.hasPrefix("3 Fehler in Teil 7 von 12.") == true)
+        #expect(errors.message?.hasPrefix("3 Fehler in Teil 7 von 128.") == true)
         #expect(errors.buttons.filter(\.isProminent).map(\.title) == ["Erneut prüfen"])
 
         let unreachable = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 13, 10))

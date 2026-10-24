@@ -236,7 +236,7 @@ final class AppModel {
             else { return nil }
             return statistics.subset
         }.first
-        return (lastSubset ?? 0) % CheckStatistics.subsetCount + 1
+        return (lastSubset ?? 0) % CheckStatistics.currentSubsetCount + 1
     }
 
     private static func emptyDetails(for job: RunJob) -> RunDetails {

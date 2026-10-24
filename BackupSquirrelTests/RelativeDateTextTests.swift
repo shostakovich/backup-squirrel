@@ -30,6 +30,14 @@ struct RelativeDateTextTests {
         #expect(text.standaloneDay(for: Fixture.date(2026, 10, 12, 4, 0), now: Fixture.now) == "Mo., 12.10.")
     }
 
+    @Test func onlyNamedDaysStandWithoutAm() {
+        #expect(text.onDay(for: Fixture.date(2026, 10, 14, 4, 0), now: Fixture.now) == "heute")
+        #expect(text.onDay(for: Fixture.date(2026, 10, 13, 4, 0), now: Fixture.now) == "gestern")
+        #expect(text.onDay(for: Fixture.date(2026, 10, 15, 4, 0), now: Fixture.now) == "morgen")
+        #expect(text.onDay(for: Fixture.date(2026, 10, 12, 4, 0), now: Fixture.now) == "am Mo., 12.10.")
+        #expect(text.onDay(for: Fixture.date(2025, 12, 31, 4, 0), now: Fixture.now) == "am Mi., 31.12.2025")
+    }
+
     @Test func comparesCalendarDaysNotTwentyFourHourSpans() {
         let justAfterMidnight = Fixture.date(2026, 10, 14, 0, 5)
         #expect(text.string(for: Fixture.date(2026, 10, 13, 23, 55), now: justAfterMidnight) == "gestern, 23:55")

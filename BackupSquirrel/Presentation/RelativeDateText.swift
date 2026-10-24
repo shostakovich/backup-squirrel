@@ -23,11 +23,13 @@ struct RelativeDateText {
         text.prefix(1).uppercased() + text.dropFirst()
     }
 
+    /// "heute geprüft", but "am Mo., 12.10. geprüft".
+    func onDay(for date: Date, now: Date) -> String {
+        abs(days(from: now, to: date)) <= 1 ? day(for: date, now: now) : "am \(day(for: date, now: now))"
+    }
+
     func day(for date: Date, now: Date) -> String {
-        let days =
-            calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date))
-            .day ?? 0
-        switch days {
+        switch days(from: now, to: date) {
         case 0: return "heute"
         case -1: return "gestern"
         case 1: return "morgen"
@@ -38,6 +40,11 @@ struct RelativeDateText {
             let year = parts.year == calendar.component(.year, from: now) ? "" : String(parts.year ?? 0)
             return "\(weekday), \(dayAndMonth)\(year)"
         }
+    }
+
+    private func days(from now: Date, to date: Date) -> Int {
+        calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: date))
+            .day ?? 0
     }
 
     func time(_ date: Date) -> String {

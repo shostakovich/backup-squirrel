@@ -154,7 +154,7 @@ final class ResticIntegrationTests {
         let outcome = try await outcome(of: .check(target, subset: 5))
         #expect(outcome.status == .success)
         #expect(outcome.details == .check(CheckStatistics(subset: 5)))
-        #expect(outcome.output.contains("--read-data-subset=5/12"))
+        #expect(outcome.output.contains("--read-data-subset=5/128"))
     }
 
     @Test func aPruneFreesWhatForgottenSnapshotsHeld() async throws {

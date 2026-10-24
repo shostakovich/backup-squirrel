@@ -188,25 +188,24 @@ struct SampleData {
     }
 
     private func maintenanceRuns(target: Target) -> [Run] {
-        let lastCheck = latest(weekday: 2, hour: 4)
+        let lastCheck = latest(hour: 4, minute: 0)
         let lastPrune = latest(weekday: 1, hour: 5)
         var runs: [Run] = []
-        let checks = scenario == .checkOverdue ? [(2, 5), (3, 4)] : [(0, 7), (1, 6)]
-        for (weeksAgo, subset) in checks {
-            let start = calendar.date(byAdding: .day, value: -7 * weeksAgo, to: lastCheck) ?? lastCheck
-            let duration: TimeInterval = 226 + Double(weeksAgo * 31)
-            if weeksAgo == 0, scenario == .checkFailed {
+        let checks = scenario == .checkOverdue ? [(3, 5), (4, 4)] : [(0, 7), (1, 6)]
+        for (daysAgo, subset) in checks {
+            let start = calendar.date(byAdding: .day, value: -daysAgo, to: lastCheck) ?? lastCheck
+            let duration: TimeInterval = 1_420 + Double(daysAgo * 31)
+            if daysAgo == 0, scenario == .checkFailed {
                 runs += failedChecks(target: target, from: latest(hour: 12, minute: 50))
                 continue
             }
-            let errors = weeksAgo == 0 && scenario == .checkErrors ? 3 : 0
+            let errors = daysAgo == 0 && scenario == .checkErrors ? 3 : 0
+            let statistics = CheckStatistics(subset: subset, errorCount: errors)
             runs.append(
                 Run(
                     targetID: target.id, status: errors > 0 ? .failed : .success, startedAt: start,
-                    finishedAt: start.addingTimeInterval(duration),
-                    details: .check(CheckStatistics(subset: subset, errorCount: errors)),
-                    output: SampleOutput.check(
-                        subset: subset, packs: 412 - weeksAgo * 9, duration: duration, errors: errors)
+                    finishedAt: start.addingTimeInterval(duration), details: .check(statistics),
+                    output: SampleOutput.check(statistics, packs: 412 - daysAgo * 9, duration: duration)
                 )
             )
         }
@@ -233,7 +232,7 @@ struct SampleData {
         return runs
     }
 
-    /// The check, caught up after a few days away, and its first retry 15 minutes later could not reach the target.
+    /// The day's check, caught up at midday, and its first retry 15 minutes later could not reach the target.
     private func failedChecks(target: Target, from start: Date) -> [Run] {
         let retry = start.addingTimeInterval(31 + 15 * 60)
         return [start, retry].map { attempt in

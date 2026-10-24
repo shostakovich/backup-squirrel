@@ -186,20 +186,20 @@ struct ScenarioTests {
         #expect(model.activeRun?.startedAt == Fixture.date(2026, 10, 13, 9, 10))
     }
 
-    @Test func weeklyChecksRotateThroughTheData() {
-        clock.now = Fixture.date(2026, 10, 19, 4, 0, 10)
+    @Test func dailyChecksRotateThroughTheData() {
+        clock.now = Fixture.date(2026, 10, 15, 4, 0, 10)
         let runs = [
-            Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 7),
-            Fixture.prune(at: Fixture.date(2026, 10, 18, 5, 0)),
+            Fixture.check(at: Fixture.date(2026, 10, 14, 4, 0), subset: 7),
+            Fixture.prune(at: Fixture.date(2026, 10, 11, 5, 0)),
         ]
         let model = model(plans: [], runs: runs)
         model.startScheduling()
         #expect(executor.jobs == [.check(Fixture.target(), subset: 8)])
 
-        let afterTwelve = self.model(
+        let afterTheLastSlice = self.model(
             plans: [],
-            runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12), runs[1]])
-        afterTwelve.startScheduling()
+            runs: [Fixture.check(at: Fixture.date(2026, 10, 14, 4, 0), subset: 128), runs[1]])
+        afterTheLastSlice.startScheduling()
         #expect(executor.jobs.last == .check(Fixture.target(), subset: 1))
     }
 

@@ -75,6 +75,29 @@ extension RunFailure: Codable {
     }
 }
 
+extension CheckStatistics: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case subset
+        case subsetCount
+        case errorCount
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        subset = try container.decode(Int.self, forKey: .subset)
+        // Checks saved before the count was stored all ran with twelve slices.
+        subsetCount = try container.decodeIfPresent(Int.self, forKey: .subsetCount) ?? 12
+        errorCount = try container.decode(Int.self, forKey: .errorCount)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(subset, forKey: .subset)
+        try container.encode(subsetCount, forKey: .subsetCount)
+        try container.encode(errorCount, forKey: .errorCount)
+    }
+}
+
 extension RunDetails: Codable {
     private enum CodingKeys: String, CodingKey {
         case backup

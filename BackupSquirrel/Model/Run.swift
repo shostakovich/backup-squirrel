@@ -36,11 +36,14 @@ struct BackupStatistics: Hashable, Sendable, Codable {
     var snapshotsForgotten = 0
 }
 
-struct CheckStatistics: Hashable, Sendable, Codable {
-    static let subsetCount = 12
+struct CheckStatistics: Hashable, Sendable {
+    /// About 10 GB per slice at 1.23 TiB, so a daily check holds the lock for minutes rather than hours.
+    static let currentSubsetCount = 128
 
-    /// 1-based index of the slice passed to `restic check --read-data-subset=n/12`.
+    /// 1-based index of the slice passed to `restic check --read-data-subset=n/m`.
     var subset: Int
+    /// Stored per run, so older checks keep showing the slicing they ran with.
+    var subsetCount = currentSubsetCount
     var errorCount = 0
 }
 

@@ -152,13 +152,14 @@ struct ResticJobRunner: Sendable {
     }
 
     private func check(subset: Int, in session: Session) async throws -> RunOutcome {
+        var statistics = CheckStatistics(subset: subset)
         let check = try await session.run([
-            "check", "--json", "--read-data-subset=\(subset)/\(CheckStatistics.subsetCount)",
+            "check", "--json", "--read-data-subset=\(statistics.subset)/\(statistics.subsetCount)",
         ])
         let errorCount = check.messages.lazy.compactMap { message -> Int? in
             if case .checkSummary(let errorCount) = message { errorCount } else { nil }
         }.last
-        let statistics = CheckStatistics(subset: subset, errorCount: errorCount ?? 0)
+        statistics.errorCount = errorCount ?? 0
         if check.exitCode == 0 { return session.outcome(.success, .check(statistics)) }
         if statistics.errorCount > 0 { return session.outcome(.failed, .check(statistics)) }
         return session.outcome(.failed, .check(statistics), failure: check.failure)

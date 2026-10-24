@@ -111,7 +111,7 @@ struct AlertPlannerTests {
         let alerts = planner.alerts(
             in: Fixture.state(runs: [Fixture.backup(at: Fixture.date(2026, 10, 14, 13, 2)), check]))
         #expect(alerts.map(\.title) == ["Fehler in den Sicherungen auf „Storage Box“"])
-        #expect(alerts.first?.body == "Die Prüfung hat 3 Fehler in Teil 7 von 12 gefunden.")
+        #expect(alerts.first?.body == "Die Prüfung hat 3 Fehler in Teil 7 von 128 gefunden.")
         #expect(alerts.first?.style == .checkNow)
         #expect(alerts.first?.command == .start(.check(Fixture.targetID)))
         #expect(alerts.first?.route == .showRun(check.id))

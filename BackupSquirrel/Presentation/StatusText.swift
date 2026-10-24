@@ -454,7 +454,7 @@ struct StatusText {
     }
 
     func windowSubtitle(for target: Target, in state: BackupState) -> String {
-        "Wöchentliche Prüfung"
+        "Tägliche Prüfung"
     }
 
     func header(for plan: Plan, in state: BackupState) -> StatusHeader {
@@ -561,7 +561,7 @@ struct StatusText {
         case .current:
             let checked = status.lastCheck.flatMap { check -> String? in
                 guard case .check(let statistics) = check.details else { return nil }
-                return "\(RunText.checkSubset(statistics)) geprüft am \(day(check.startedAt, state))"
+                return "\(RunText.checkSubset(statistics)) \(onDay(check.startedAt, state)) geprüft"
             }
             return StatusHeader(
                 symbol: symbol, title: "Keine Fehler gefunden", details: [checked, nextCheck].compactMap { $0 },
@@ -644,7 +644,7 @@ struct StatusText {
         switch standstill {
         case .failing(let run): reason(run, state)
         case .volumeMissing(let volume): "\(GermanFormat.quoted(volume)) nicht angeschlossen"
-        case .cancelled(let date): "letzter Versuch am \(day(date, state)) abgebrochen"
+        case .cancelled(let date): "letzter Versuch \(onDay(date, state)) abgebrochen"
         case .noAttempt(let since): since.map { "kein Versuch seit \(day($0, state))" }
         }
     }
@@ -653,7 +653,7 @@ struct StatusText {
         switch standstill {
         case .failing(let run): "\(reason(run, state))."
         case .volumeMissing(let volume): "Das Volume \(GermanFormat.quoted(volume)) ist nicht angeschlossen."
-        case .cancelled(let date): "Der letzte Versuch am \(day(date, state)) wurde abgebrochen."
+        case .cancelled(let date): "Der letzte Versuch \(onDay(date, state)) wurde abgebrochen."
         case .noAttempt(let since): since.map { GermanFormat.sentence("Kein Versuch seit \(day($0, state))") }
         }
     }
@@ -704,6 +704,10 @@ struct StatusText {
 
     private func moment(_ date: Date, _ state: BackupState) -> String {
         dates.string(for: date, now: state.now)
+    }
+
+    private func onDay(_ date: Date, _ state: BackupState) -> String {
+        dates.onDay(for: date, now: state.now)
     }
 
     private func day(_ date: Date?, _ state: BackupState) -> String {
