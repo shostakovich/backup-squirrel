@@ -7,8 +7,8 @@
 
 ## Requirements
 
-- macOS 26 or later
-- Xcode 26 or later to build
+- macOS 27 or later
+- Xcode 27 or later to build
 
 ## Build from source
 
