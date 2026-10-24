@@ -49,12 +49,28 @@ struct PersistenceTests {
         try store.save(configuration)
         let text = try String(contentsOf: store.configurationURL, encoding: .utf8)
         #expect(text.contains(#""hostName" : "roberts-mac""#))
-        #expect(text.contains(#""createdAt" : "2026-10-09T22:00:00.000Z""#))
+        #expect(text.contains(#""createdAt" : "2026-10-13T22:00:00.000Z""#))
         #expect(text.contains(#""daily" : {"#))
         #expect(text.contains(#""everyHours" : 1"#))
         #expect(text.contains(#""pattern" : "*.tmp""#))
         #expect(!text.contains("_0"))
         #expect(!text.contains("geheim"))
+    }
+
+    @Test func aCheckSavedBeforeTheSliceCountWasStoredWasOneOfTwelve() throws {
+        try store.saveHistory(
+            [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 7)], now: Fixture.now,
+            calendar: Fixture.calendar)
+        let saved = try String(contentsOf: store.historyURL, encoding: .utf8)
+        #expect(saved.contains(#""subsetCount" : 128"#))
+        let legacy = saved.replacingOccurrences(
+            of: #",\s*"subsetCount" : 128"#, with: "", options: .regularExpression)
+        #expect(!legacy.contains("subsetCount"))
+        try Data(legacy.utf8).write(to: store.historyURL)
+
+        let run = try #require(store.load(now: Fixture.now).runs.first)
+        #expect(run.details == .check(CheckStatistics(subset: 7, subsetCount: 12)))
+        #expect(RunText.summary(of: run, in: Fixture.state(runs: [run])) == "Teil 7 von 12 · keine Fehler")
     }
 
     @Test func historyOlderThanTwelveMonthsIsDroppedOnSave() throws {

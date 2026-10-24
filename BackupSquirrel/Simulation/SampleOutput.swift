@@ -39,7 +39,7 @@ enum SampleOutput {
         ].joined(separator: "\n")
     }
 
-    static func check(subset: Int, packs: Int, duration: TimeInterval, errors: Int = 0) -> String {
+    static func check(_ statistics: CheckStatistics, packs: Int, duration: TimeInterval) -> String {
         var lines = [
             "using temporary cache in /private/var/folders/xy/T/restic-check-cache-2190475563",
             "create exclusive lock for repository",
@@ -47,15 +47,15 @@ enum SampleOutput {
             "check all packs",
             "check snapshots, trees and blobs",
             "[0:03] 100.00%  37 / 37 snapshots",
-            "read group #\(subset) of \(packs) data packs (out of total \(packs * CheckStatistics.subsetCount) packs "
-                + "in \(CheckStatistics.subsetCount) groups)",
+            "read group #\(statistics.subset) of \(packs) data packs "
+                + "(out of total \(packs * statistics.subsetCount) packs in \(statistics.subsetCount) groups)",
         ]
-        lines += (0..<errors).map { index in
+        lines += (0..<statistics.errorCount).map { index in
             "pack \(String(format: "%08x", (index + 7) &* 2_654_435_761 & 0xffff_ffff))...: "
                 + "Data integrity check failed: ciphertext verification failed"
         }
         lines.append("[\(clock(duration))] 100.00%  \(packs) / \(packs) packs")
-        lines.append(errors == 0 ? "no errors were found" : "Fatal: repository contains errors")
+        lines.append(statistics.errorCount == 0 ? "no errors were found" : "Fatal: repository contains errors")
         return lines.joined(separator: "\n")
     }
 

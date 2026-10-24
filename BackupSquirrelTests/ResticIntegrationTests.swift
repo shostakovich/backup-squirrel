@@ -151,10 +151,10 @@ final class ResticIntegrationTests {
         try await createRepository()
         try write("file.bin", bytes: 100_000)
         _ = try await outcome(of: .backup(plan(), target))
-        let outcome = try await outcome(of: .check(target, subset: 5))
+        let outcome = try await outcome(of: .check(target, subset: 5, subsetCount: 128))
         #expect(outcome.status == .success)
         #expect(outcome.details == .check(CheckStatistics(subset: 5)))
-        #expect(outcome.output.contains("--read-data-subset=5/12"))
+        #expect(outcome.output.contains("--read-data-subset=5/128"))
     }
 
     @Test func aPruneFreesWhatForgottenSnapshotsHeld() async throws {

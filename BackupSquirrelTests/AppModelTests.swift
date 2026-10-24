@@ -142,14 +142,26 @@ struct AppModelTests {
         #expect(model.activeRun?.planID == Fixture.dataID)
     }
 
-    @Test func checksRotateThroughTheTwelveSubsets() {
-        let model = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12)])
+    @Test func checksRotateThroughTheSubsets() {
+        let model = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 128)])
         model.start(.check(Fixture.targetID))
-        #expect(executor.jobs == [.check(Fixture.target(), subset: 1)])
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 1, subsetCount: 128)])
 
         let next = makeModel(runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 7)])
         next.start(.check(Fixture.targetID))
-        #expect(executor.jobs.last == .check(Fixture.target(), subset: 8))
+        #expect(executor.jobs.last == .check(Fixture.target(), subset: 8, subsetCount: 128))
+    }
+
+    @Test func aCheckAfterTheTwelveSlicesOfOldContinuesWithTheNextOf128() {
+        let old = Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12, subsetCount: 12)
+        makeModel(runs: [old]).start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 13, subsetCount: 128)])
+    }
+
+    @Test func aNewCheckRemembersItIsOneOf128Slices() {
+        let model = makeModel()
+        model.start(.check(Fixture.targetID))
+        #expect(model.runs.last?.details == .check(CheckStatistics(subset: 1, subsetCount: 128)))
     }
 
     @Test func aCheckThatCouldNotRunDoesNotUseUpItsSubset() {
@@ -158,7 +170,41 @@ struct AppModelTests {
             Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7),
         ]
         makeModel(runs: runs).start(.check(Fixture.targetID))
-        #expect(executor.jobs == [.check(Fixture.target(), subset: 7)])
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 7, subsetCount: 128)])
+    }
+
+    @Test func aCheckAfterOneThatFoundErrorsReadsTheSameSliceAgain() {
+        let errors = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7, errorCount: 3)
+        makeModel(runs: [errors]).start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 7, subsetCount: 128)])
+    }
+
+    @Test func onceTheRepeatedSlicePassesTheNextOneFollows() {
+        let runs = [
+            Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7, errorCount: 3),
+            Fixture.check(at: Fixture.date(2026, 10, 13, 4, 0), subset: 7),
+        ]
+        makeModel(runs: runs).start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 8, subsetCount: 128)])
+    }
+
+    @Test func aRepeatThatWasCancelledOrCouldNotRunIsRepeatedAgain() {
+        let runs = [
+            Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7, errorCount: 3),
+            Fixture.check(status: .cancelled, at: Fixture.date(2026, 10, 13, 4, 0), subset: 7),
+            Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 4, 0), subset: 7),
+        ]
+        makeModel(runs: runs).start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 7, subsetCount: 128)])
+    }
+
+    @Test func anOldSliceWithErrorsIsRepeatedWithItsOwnSliceCount() {
+        let old = Fixture.check(
+            status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 1, subsetCount: 12, errorCount: 2)
+        let model = makeModel(runs: [old])
+        model.start(.check(Fixture.targetID))
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 1, subsetCount: 12)])
+        #expect(model.runs.last?.details == .check(CheckStatistics(subset: 1, subsetCount: 12)))
     }
 
     @Test func aRequestWhileBusyWaitsInTheQueueOnce() async {
@@ -170,7 +216,7 @@ struct AppModelTests {
         #expect(model.state.queued == [.check(Fixture.targetID)])
         executor.finish(with: Self.success)
         await eventually { executor.jobs.count == 2 }
-        #expect(executor.jobs.last == .check(Fixture.target(), subset: 1))
+        #expect(executor.jobs.last == .check(Fixture.target(), subset: 1, subsetCount: 128))
         #expect(model.queuedRequests.isEmpty)
     }
 

@@ -69,7 +69,8 @@ struct ResticJobRunner: Sendable {
             }
             switch job {
             case .backup(let plan, _): return try await backup(plan, in: session)
-            case .check(_, let subset): return try await check(subset: subset, in: session)
+            case .check(_, let subset, let subsetCount):
+                return try await check(subset: subset, of: subsetCount, in: session)
             case .prune: return try await prune(in: session)
             }
         } catch let error as ProcessLaunchError {
@@ -151,14 +152,15 @@ struct ResticJobRunner: Sendable {
         return outcome
     }
 
-    private func check(subset: Int, in session: Session) async throws -> RunOutcome {
+    private func check(subset: Int, of subsetCount: Int, in session: Session) async throws -> RunOutcome {
+        var statistics = CheckStatistics(subset: subset, subsetCount: subsetCount)
         let check = try await session.run([
-            "check", "--json", "--read-data-subset=\(subset)/\(CheckStatistics.subsetCount)",
+            "check", "--json", "--read-data-subset=\(statistics.subset)/\(statistics.subsetCount)",
         ])
         let errorCount = check.messages.lazy.compactMap { message -> Int? in
             if case .checkSummary(let errorCount) = message { errorCount } else { nil }
         }.last
-        let statistics = CheckStatistics(subset: subset, errorCount: errorCount ?? 0)
+        statistics.errorCount = errorCount ?? 0
         if check.exitCode == 0 { return session.outcome(.success, .check(statistics)) }
         if statistics.errorCount > 0 { return session.outcome(.failed, .check(statistics)) }
         return session.outcome(.failed, .check(statistics), failure: check.failure)
@@ -176,7 +178,7 @@ struct ResticJobRunner: Sendable {
     private static func emptyDetails(for job: RunJob) -> RunDetails {
         switch job {
         case .backup: .backup(BackupStatistics())
-        case .check(_, let subset): .check(CheckStatistics(subset: subset))
+        case .check(_, let subset, let subsetCount): .check(CheckStatistics(subset: subset, subsetCount: subsetCount))
         case .prune: .prune(PruneStatistics())
         }
     }

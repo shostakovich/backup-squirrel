@@ -261,21 +261,21 @@ struct StatusEvaluatorTests {
     }
 
     @Test func targetHealthFollowsTheLastCheckAndPrune() {
-        let monday = Fixture.date(2026, 10, 12, 4, 0)
+        let today = Fixture.date(2026, 10, 14, 4, 0)
         let sunday = Fixture.date(2026, 10, 11, 5, 0)
-        #expect(targetStatus([Fixture.check(at: monday), Fixture.prune(at: sunday)]).health == .current)
+        #expect(targetStatus([Fixture.check(at: today), Fixture.prune(at: sunday)]).health == .current)
         #expect(
-            targetStatus([Fixture.check(at: monday), Fixture.prune(status: .failed, at: sunday)]).health
+            targetStatus([Fixture.check(at: today), Fixture.prune(status: .failed, at: sunday)]).health
                 == .pruneFailed)
         #expect(targetStatus([Fixture.check(status: .running, at: Fixture.now)]).health == .running)
     }
 
     @Test func damagedDataAndACheckThatCouldNotRunAreDifferentProblems() {
-        let monday = Fixture.date(2026, 10, 12, 4, 0)
-        let errors = targetStatus([Fixture.check(status: .failed, at: monday, errorCount: 3)])
+        let today = Fixture.date(2026, 10, 14, 4, 0)
+        let errors = targetStatus([Fixture.check(status: .failed, at: today, errorCount: 3)])
         #expect(errors.health == .checkFoundErrors)
         #expect(errors.lastCheck?.errorCount == 3)
-        #expect(errors.nextCheck == .at(Fixture.date(2026, 10, 19, 4, 0)))
+        #expect(errors.nextCheck == .at(Fixture.date(2026, 10, 15, 4, 0)))
 
         let earlier = Fixture.check(at: Fixture.date(2026, 10, 5, 4, 0), subset: 6)
         let unreachable = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 13, 0))
@@ -284,6 +284,17 @@ struct StatusEvaluatorTests {
         #expect(couldNotRun.lastCheck == earlier)
         #expect(couldNotRun.failedCheck == unreachable)
         #expect(couldNotRun.checkFailures == 1)
+    }
+
+    @Test func damagedDataStaysUntilTheRepeatedSlicePasses() {
+        let errors = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7, errorCount: 3)
+        let cancelled = Fixture.check(status: .cancelled, at: Fixture.date(2026, 10, 13, 4, 0), subset: 7)
+        let unreachable = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 4, 0), subset: 7)
+        #expect(targetStatus([errors, cancelled]).health == .checkFoundErrors)
+        #expect(targetStatus([errors, cancelled, unreachable]).health == .checkFoundErrors)
+
+        let passed = Fixture.check(at: Fixture.date(2026, 10, 14, 5, 0), subset: 7)
+        #expect(targetStatus([errors, cancelled, unreachable, passed]).health == .current)
     }
 
     @Test func checksAndPrunesRetryLikeBackups() {
@@ -298,14 +309,38 @@ struct StatusEvaluatorTests {
                 == .retry(Fixture.date(2026, 10, 14, 13, 21, 37)))
     }
 
-    @Test func aCheckIsOverdueAfterTwoMissedWeeks() {
-        #expect(targetStatus([Fixture.check(at: Fixture.date(2026, 9, 30, 13, 21))]).health == .current)
-        let overdue = targetStatus([Fixture.check(at: Fixture.date(2026, 9, 28, 4, 0))])
+    @Test func aCheckIsOverdueAfterTwoMissedDays() {
+        #expect(targetStatus([Fixture.check(at: Fixture.date(2026, 10, 12, 13, 21))]).health == .current)
+        let overdue = targetStatus([Fixture.check(at: Fixture.date(2026, 10, 12, 13, 19))])
         #expect(overdue.health == .checkOverdue)
         #expect(overdue.nextCheck == .catchUp)
         let queued = targetStatus(
-            [Fixture.check(at: Fixture.date(2026, 9, 28, 4, 0))], queued: [.check(Fixture.targetID)])
+            [Fixture.check(at: Fixture.date(2026, 10, 12, 13, 19))], queued: [.check(Fixture.targetID)])
         #expect(queued.health == .current)
+    }
+
+    @Test func anOverdueCheckLeavesTheWeeklyPruneAlone() {
+        let prune = Fixture.prune(at: Fixture.date(2026, 10, 11, 5, 0))
+        let status = targetStatus([Fixture.check(at: Fixture.date(2026, 10, 11, 4, 0)), prune])
+        #expect(status.health == .checkOverdue)
+        #expect(status.nextCheck == .catchUp)
+        #expect(status.nextPrune == .at(Fixture.date(2026, 10, 18, 5, 0)))
+    }
+
+    @Test func aPruneSixDaysAgoIsNotYetDueWhileTheCheckIsDueDaily() {
+        let runs = [
+            Fixture.check(at: Fixture.date(2026, 10, 13, 4, 0)), Fixture.prune(at: Fixture.date(2026, 10, 8, 14, 0)),
+        ]
+        let status = targetStatus(runs)
+        #expect(status.health == .current)
+        #expect(status.nextCheck == .catchUp)
+        #expect(status.nextPrune == .at(Fixture.date(2026, 10, 15, 14, 0)))
+    }
+
+    @Test func aCheckThatFailedForGoodRetriesADayLater() {
+        let failures = (0..<4).map { Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 9 + $0, 0)) }
+        let status = targetStatus([Fixture.check(at: Fixture.date(2026, 10, 14, 4, 0))] + failures)
+        #expect(status.nextCheck == .retry(Fixture.date(2026, 10, 15, 12, 3, 46)))
     }
 
     @Test func anOverdueCheckNamesItsLastAttempt() {
@@ -315,16 +350,17 @@ struct StatusEvaluatorTests {
         #expect(targetStatus([lastCheck]).checkStandstill == .noAttempt(since: lastCheck.startedAt))
     }
 
-    @Test func aNewTargetIsNotYetCheckedUntilTwoWeeksPass() {
-        let fresh = Fixture.target(createdAt: Fixture.date(2026, 10, 10))
+    @Test func aNewTargetIsNotYetCheckedUntilTwoDaysPass() {
+        let fresh = Fixture.target(createdAt: Fixture.date(2026, 10, 14))
         #expect(targetStatus([], target: fresh).health == .notYetChecked)
-        #expect(targetStatus([], target: fresh).nextCheck == .at(Fixture.date(2026, 10, 17)))
-        #expect(targetStatus([], target: Fixture.target(createdAt: Fixture.date(2026, 9, 1))).health == .checkOverdue)
+        #expect(targetStatus([], target: fresh).nextCheck == .at(Fixture.date(2026, 10, 15)))
+        #expect(targetStatus([], target: fresh).nextPrune == .at(Fixture.date(2026, 10, 21)))
+        #expect(targetStatus([], target: Fixture.target(createdAt: Fixture.date(2026, 10, 12))).health == .checkOverdue)
     }
 
-    @Test func checksAndPrunesAreWeekly() {
+    @Test func checksAreDailyAndPrunesWeekly() {
         let status = targetStatus(Fixture.maintenance())
-        #expect(status.nextCheck == .at(Fixture.date(2026, 10, 19, 4, 0)))
+        #expect(status.nextCheck == .at(Fixture.date(2026, 10, 15, 4, 0)))
         #expect(status.nextPrune == .at(Fixture.date(2026, 10, 18, 5, 0)))
     }
 

@@ -118,7 +118,8 @@ enum TargetHealth: Hashable, Sendable {
 }
 
 struct TargetStatus: Hashable, Sendable {
-    static let maintenanceInterval: TimeInterval = 7 * 24 * 3600
+    static let checkInterval: TimeInterval = 24 * 3600
+    static let pruneInterval: TimeInterval = 7 * 24 * 3600
 
     var health: TargetHealth
     /// The last check that ran to the end, whatever it found.
@@ -310,7 +311,7 @@ struct StatusEvaluator {
         } else if !pruneFailures.isEmpty {
             health = .pruneFailed
         } else if !checkQueued,
-            isOverdue(since: lastCheck?.startedAt ?? target.createdAt, TargetStatus.maintenanceInterval, state)
+            isOverdue(since: lastCheck?.startedAt ?? target.createdAt, TargetStatus.checkInterval, state)
         {
             health = .checkOverdue
         } else if lastCheck == nil {
@@ -344,9 +345,11 @@ struct StatusEvaluator {
             nextCheck: checkQueued
                 ? .catchUp
                 : nextMaintenance(
-                    after: lastCheck?.startedAt ?? target.createdAt, attempts: checks, failures: checkFailures, state),
+                    after: lastCheck?.startedAt ?? target.createdAt, every: TargetStatus.checkInterval,
+                    attempts: checks, failures: checkFailures, state),
             nextPrune: nextMaintenance(
-                after: lastPrune?.startedAt ?? target.createdAt, attempts: prunes, failures: pruneFailures, state),
+                after: lastPrune?.startedAt ?? target.createdAt, every: TargetStatus.pruneInterval,
+                attempts: prunes, failures: pruneFailures, state),
             lastConnection: (reached + [target.connectedAt].compactMap { $0 }).max()
         )
     }
@@ -422,14 +425,16 @@ struct StatusEvaluator {
         !isInGracePeriod(state) && state.now.timeIntervalSince(reference) > Self.overdueIntervals * interval
     }
 
-    private func nextMaintenance(after last: Date, attempts: [Run], failures: [Run], _ state: BackupState) -> NextRun {
+    private func nextMaintenance(
+        after last: Date, every interval: TimeInterval, attempts: [Run], failures: [Run], _ state: BackupState
+    ) -> NextRun {
         let newest = attempts.last
         if let failed = failures.last, failed.id == newest?.id {
-            let delay = Self.retryDelay(afterFailures: failures.count) ?? TargetStatus.maintenanceInterval
+            let delay = Self.retryDelay(afterFailures: failures.count) ?? interval
             let due = failed.endedAt.addingTimeInterval(delay)
             return due > state.now ? .retry(due) : .catchUp
         }
-        let due = last.addingTimeInterval(TargetStatus.maintenanceInterval)
+        let due = last.addingTimeInterval(interval)
         if let newest, newest.status == .cancelled, newest.startedAt > last {
             let resume = newest.endedAt.addingTimeInterval(Self.pauseAfterCancel)
             if resume > due { return resume > state.now ? .retry(resume) : .catchUp }

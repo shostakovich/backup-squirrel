@@ -186,21 +186,49 @@ struct ScenarioTests {
         #expect(model.activeRun?.startedAt == Fixture.date(2026, 10, 13, 9, 10))
     }
 
-    @Test func weeklyChecksRotateThroughTheData() {
-        clock.now = Fixture.date(2026, 10, 19, 4, 0, 10)
+    @Test func dailyChecksRotateThroughTheData() {
+        clock.now = Fixture.date(2026, 10, 15, 4, 0, 10)
         let runs = [
-            Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 7),
-            Fixture.prune(at: Fixture.date(2026, 10, 18, 5, 0)),
+            Fixture.check(at: Fixture.date(2026, 10, 14, 4, 0), subset: 7),
+            Fixture.prune(at: Fixture.date(2026, 10, 11, 5, 0)),
         ]
         let model = model(plans: [], runs: runs)
         model.startScheduling()
-        #expect(executor.jobs == [.check(Fixture.target(), subset: 8)])
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 8, subsetCount: 128)])
 
-        let afterTwelve = self.model(
+        let afterTheLastSlice = self.model(
             plans: [],
-            runs: [Fixture.check(at: Fixture.date(2026, 10, 12, 4, 0), subset: 12), runs[1]])
-        afterTwelve.startScheduling()
-        #expect(executor.jobs.last == .check(Fixture.target(), subset: 1))
+            runs: [Fixture.check(at: Fixture.date(2026, 10, 14, 4, 0), subset: 128), runs[1]])
+        afterTheLastSlice.startScheduling()
+        #expect(executor.jobs.last == .check(Fixture.target(), subset: 1, subsetCount: 128))
+    }
+
+    @Test func dailyChecksRepeatASliceWithErrorsUntilItPasses() async {
+        clock.now = Fixture.date(2026, 10, 15, 4, 0, 10)
+        let runs = [
+            Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 4, 0), subset: 7, errorCount: 3),
+            Fixture.prune(at: Fixture.date(2026, 10, 11, 5, 0)),
+        ]
+        let model = model(plans: [], runs: runs)
+        let evaluator = StatusEvaluator(calendar: Fixture.calendar)
+        let health = { evaluator.status(of: Fixture.target(), in: model.state).health }
+        model.startScheduling()
+        #expect(executor.jobs == [.check(Fixture.target(), subset: 7, subsetCount: 128)])
+
+        let stillDamaged = RunOutcome(
+            status: .failed, details: .check(CheckStatistics(subset: 7, errorCount: 3)), output: "")
+        await finish(model, at: Fixture.date(2026, 10, 15, 4, 5), with: stillDamaged)
+        #expect(health() == .checkFoundErrors)
+        clock.now = Fixture.date(2026, 10, 16, 4, 1)
+        model.tick()
+        #expect(executor.jobs.last == .check(Fixture.target(), subset: 7, subsetCount: 128))
+
+        let passed = RunOutcome(status: .success, details: .check(CheckStatistics(subset: 7)), output: "")
+        await finish(model, at: Fixture.date(2026, 10, 16, 4, 5), with: passed)
+        #expect(health() == .current)
+        clock.now = Fixture.date(2026, 10, 17, 4, 1)
+        model.tick()
+        #expect(executor.jobs.last == .check(Fixture.target(), subset: 8, subsetCount: 128))
     }
 
     @Test func unreadableFilesLeaveASnapshotAndAWarning() async throws {

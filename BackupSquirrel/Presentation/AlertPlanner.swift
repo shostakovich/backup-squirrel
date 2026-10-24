@@ -160,7 +160,7 @@ struct AlertPlanner {
         let name = GermanFormat.quoted(target.name)
         let dates = RelativeDateText(calendar: calendar)
         let lastChecked = status.lastCheck.map {
-            GermanFormat.sentence("Die letzte Prüfung war am \(dates.day(for: $0.startedAt, now: state.now))")
+            GermanFormat.sentence("Die letzte Prüfung war \(dates.onDay(for: $0.startedAt, now: state.now))")
         }
         let check = AlertCommand.start(.check(target.id))
         switch status.health {
@@ -187,7 +187,7 @@ struct AlertPlanner {
         case .checkOverdue:
             var body = lastChecked ?? "Es gab noch keine Prüfung."
             if case .cancelled(let date) = status.checkStandstill {
-                body += " Der letzte Versuch am \(dates.day(for: date, now: state.now)) wurde abgebrochen."
+                body += " Der letzte Versuch \(dates.onDay(for: date, now: state.now)) wurde abgebrochen."
             }
             return BackupAlert(
                 key: AlertKey(kind: .checkOverdue, subject: target.id),
@@ -219,7 +219,7 @@ struct AlertPlanner {
         case .failing(let run): return cause(of: run, state)
         case .volumeMissing(let volume): return "Das Volume \(GermanFormat.quoted(volume)) ist nicht angeschlossen."
         case .cancelled(let date):
-            return "Der letzte Versuch am \(dates.day(for: date, now: state.now)) wurde abgebrochen."
+            return "Der letzte Versuch \(dates.onDay(for: date, now: state.now)) wurde abgebrochen."
         case .noAttempt(let since):
             return since.map { "Seit \(dates.day(for: $0, now: state.now)) gab es keinen Versuch." }
         }

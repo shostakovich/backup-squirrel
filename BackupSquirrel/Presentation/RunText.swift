@@ -150,7 +150,7 @@ enum RunText {
     }
 
     static func checkSubset(_ statistics: CheckStatistics) -> String {
-        "Teil \(statistics.subset) von \(CheckStatistics.subsetCount)"
+        "Teil \(statistics.subset) von \(statistics.subsetCount)"
     }
 
     static func errorsFound(_ statistics: CheckStatistics) -> String {

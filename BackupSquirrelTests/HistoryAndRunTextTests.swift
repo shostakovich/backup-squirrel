@@ -114,9 +114,9 @@ struct RunTextTests {
     }
 
     @Test func checkAndPruneSummariesAvoidJargon() {
-        #expect(RunText.summary(of: Fixture.check(at: start), in: state) == "Teil 7 von 12 · keine Fehler")
+        #expect(RunText.summary(of: Fixture.check(at: start), in: state) == "Teil 7 von 128 · keine Fehler")
         let damaged = Fixture.check(status: .failed, at: start, errorCount: 2)
-        #expect(RunText.summary(of: damaged, in: state) == "2 Fehler in Teil 7 von 12")
+        #expect(RunText.summary(of: damaged, in: state) == "2 Fehler in Teil 7 von 128")
         #expect(RunText.title(of: damaged) == "Fehler gefunden")
         #expect(RunText.title(of: Fixture.check(status: .failed, at: start)) == "Fehlgeschlagen")
         #expect(RunText.summary(of: Fixture.prune(at: start), in: state) == "14 ältere Sicherungen entfernt")

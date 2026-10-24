@@ -23,8 +23,8 @@ struct TargetDetailView: View {
                 StatusHeaderView(header: text.header(for: target, in: state), isEnabled: isEnabled, perform: perform)
             } footer: {
                 Text(
-                    "Jede Woche wird ein Zwölftel der gesicherten Daten vom Server gelesen und geprüft. "
-                        + "Nach zwölf Wochen ist alles einmal geprüft.")
+                    "Jeden Tag wird ein Teil der gesicherten Daten vom Server gelesen und geprüft. "
+                        + "Nach \(CheckStatistics.currentSubsetCount) Tagen ist alles einmal geprüft.")
             }
             recentRunsSection(state: state)
             connectionSection(lastConnection: status.lastConnection, state: state)
