@@ -392,8 +392,8 @@ struct StatusText {
             let since = RelativeDateText.capitalized(notBackedUpFor(status, state))
             return [since, standstillPhrase(status.standstill, state)].compactMap { $0 }.joined(separator: " · ")
         case .failed:
-            let reason = status.failedAttempt.map { reason($0, state) } ?? "Sicherung fehlgeschlagen"
-            return "\(reason) · zuletzt \(backedUp)"
+            let failure = status.failedAttempt.map { reason($0, state) } ?? "Sicherung fehlgeschlagen"
+            return "\(failure) · zuletzt \(backedUp)"
         case .warning:
             switch status.warning {
             case .unreadableFiles(let count): return "\(RunText.unreadableFiles(count)) · \(backedUp)"
@@ -429,12 +429,12 @@ struct StatusText {
             let errors = status.lastCheck.map(errorsFound) ?? "Fehler gefunden"
             return "\(errors) · geprüft \(day(status.lastCheck?.startedAt, state))"
         case .checkFailed:
-            let reason = status.failedCheck.map { reason($0, state) } ?? "Prüfung fehlgeschlagen"
-            guard let lastCheck = status.lastCheck else { return "\(reason) · noch nie geprüft" }
-            return "\(reason) · zuletzt geprüft \(day(lastCheck.startedAt, state))"
+            let failure = status.failedCheck.map { reason($0, state) } ?? "Prüfung fehlgeschlagen"
+            guard let lastCheck = status.lastCheck else { return "\(failure) · noch nie geprüft" }
+            return "\(failure) · zuletzt geprüft \(day(lastCheck.startedAt, state))"
         case .pruneFailed:
-            let reason = status.failedPrune.map { reason($0, state) }
-            return ["Aufräumen fehlgeschlagen", reason].compactMap { $0 }.joined(separator: " · ")
+            let failure = status.failedPrune.map { reason($0, state) }
+            return ["Aufräumen fehlgeschlagen", failure].compactMap { $0 }.joined(separator: " · ")
         }
     }
 

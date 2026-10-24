@@ -218,11 +218,11 @@ struct ScenarioTests {
         let run = try #require(model.runs.last)
         #expect(run.status == .warning)
         #expect(run.details == .backup(BackupStatistics(unreadableFiles: files)))
-        let status = try #require(status(of: home.id, in: model))
-        #expect(status.lastSnapshot?.id == run.id)
-        #expect(status.health == .warning)
-        #expect(status.warning == .unreadableFiles(3))
-        #expect(status.nextRun == .at(Fixture.date(2026, 10, 14, 14, 2)))
+        let homeStatus = try #require(status(of: home.id, in: model))
+        #expect(homeStatus.lastSnapshot?.id == run.id)
+        #expect(homeStatus.health == .warning)
+        #expect(homeStatus.warning == .unreadableFiles(3))
+        #expect(homeStatus.nextRun == .at(Fixture.date(2026, 10, 14, 14, 2)))
         #expect(run.monitorPush?.failure == nil)
     }
 }
