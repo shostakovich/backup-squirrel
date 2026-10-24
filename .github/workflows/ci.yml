@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-test:
-    runs-on: macos-27
+    runs-on: xcode-27
     steps:
       - uses: actions/checkout@v4
 
