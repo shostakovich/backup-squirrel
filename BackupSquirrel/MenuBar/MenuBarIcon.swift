@@ -7,6 +7,8 @@ enum MenuBarIcon {
     static let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular, scale: .medium)
     /// Every state's image has this size, so the status item never changes width; the templates are laid out for it.
     static let pointSize = NSSize(width: 18, height: 17)
+    /// The symbol's cap-height band at 2x; the status bar centres images by their alignment rect.
+    static let alignmentRect = CGRect(x: 0, y: 3.5, width: 18, height: 9)
     /// The room the templates leave for a badge, top-down in points; whole points, so the ring stays sharp at 1x.
     static let badgeRect = CGRect(x: 10, y: 8, width: 8, height: 8)
     static let minimumProgress = 0.1
@@ -15,29 +17,33 @@ enum MenuBarIcon {
 
     private static let progressWidth: CGFloat = 2
 
-    static func image(for state: MenuBarIconState) -> NSImage {
+    /// AppKit sizes a symbol to the screen's pixel grid (19 pt wide at 1x), so it is always drawn into `pointSize`.
+    static func image(for state: MenuBarIconState, symbol: NSImage? = nil) -> NSImage {
+        let symbol = symbol ?? Self.symbol(for: state)
         let image: NSImage
         if case .running = state {
             image = NSImage(size: pointSize)
             for scale in [1.0, 2.0] {
-                guard let cgImage = render(state, scale: scale) else { continue }
+                guard let cgImage = render(state, symbol: symbol, scale: scale) else { continue }
                 let representation = NSBitmapImageRep(cgImage: cgImage)
                 representation.size = pointSize
                 image.addRepresentation(representation)
             }
-            // The status bar centres images by their alignment rect; a symbol's is its cap-height band.
-            image.alignmentRect = symbol(for: state).alignmentRect
         } else {
-            image = symbol(for: state)
+            image = NSImage(size: pointSize, flipped: false) { frame in
+                symbol.draw(in: frame)
+                return true
+            }
         }
+        image.alignmentRect = alignmentRect
         image.isTemplate = true
         image.accessibilityDescription = accessibilityDescription(for: state)
         return image
     }
 
-    static func render(_ state: MenuBarIconState, scale: CGFloat) -> CGImage? {
+    static func render(_ state: MenuBarIconState, symbol: NSImage? = nil, scale: CGFloat) -> CGImage? {
         guard let context = makeContext(size: pointSize, scale: scale) else { return nil }
-        draw(symbol(for: state), in: context)
+        draw(symbol ?? Self.symbol(for: state), size: pointSize, in: context)
         if case .running(let fraction) = state {
             drawProgress(fraction, in: context, scale: scale)
         }
@@ -47,7 +53,7 @@ enum MenuBarIcon {
     /// For snapshots that compare the squirrel with system symbols.
     static func render(_ image: NSImage, scale: CGFloat) -> CGImage? {
         guard let context = makeContext(size: image.size, scale: scale) else { return nil }
-        draw(image, in: context)
+        draw(image, size: image.size, in: context)
         return context.makeImage()
     }
 
@@ -70,7 +76,7 @@ enum MenuBarIcon {
         }
     }
 
-    private static func symbol(for state: MenuBarIconState) -> NSImage {
+    static func symbol(for state: MenuBarIconState) -> NSImage {
         NSImage(symbolName: symbolName(for: state), variableValue: 1)?.withSymbolConfiguration(configuration)
             ?? NSImage(size: pointSize)
     }
@@ -86,10 +92,10 @@ enum MenuBarIcon {
         return context
     }
 
-    private static func draw(_ image: NSImage, in context: CGContext) {
+    private static func draw(_ image: NSImage, size: NSSize, in context: CGContext) {
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: false)
-        image.draw(in: NSRect(origin: .zero, size: image.size))
+        image.draw(in: NSRect(origin: .zero, size: size))
         NSGraphicsContext.restoreGraphicsState()
     }
 
