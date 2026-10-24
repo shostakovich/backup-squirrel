@@ -286,6 +286,17 @@ struct StatusEvaluatorTests {
         #expect(couldNotRun.checkFailures == 1)
     }
 
+    @Test func damagedDataStaysUntilTheRepeatedSlicePasses() {
+        let errors = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 12, 4, 0), subset: 7, errorCount: 3)
+        let cancelled = Fixture.check(status: .cancelled, at: Fixture.date(2026, 10, 13, 4, 0), subset: 7)
+        let unreachable = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 4, 0), subset: 7)
+        #expect(targetStatus([errors, cancelled]).health == .checkFoundErrors)
+        #expect(targetStatus([errors, cancelled, unreachable]).health == .checkFoundErrors)
+
+        let passed = Fixture.check(at: Fixture.date(2026, 10, 14, 5, 0), subset: 7)
+        #expect(targetStatus([errors, cancelled, unreachable, passed]).health == .current)
+    }
+
     @Test func checksAndPrunesRetryLikeBackups() {
         let checkFailure = Fixture.check(status: .failed, at: Fixture.date(2026, 10, 14, 13, 10))
         #expect(targetStatus([checkFailure]).nextCheck == .retry(Fixture.date(2026, 10, 14, 13, 28, 46)))

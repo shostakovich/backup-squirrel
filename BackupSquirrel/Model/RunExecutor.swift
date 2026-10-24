@@ -8,12 +8,12 @@ enum RunRequest: Hashable, Sendable {
 
 enum RunJob: Hashable, Sendable {
     case backup(Plan, Target)
-    case check(Target, subset: Int)
+    case check(Target, subset: Int, subsetCount: Int)
     case prune(Target)
 
     var target: Target {
         switch self {
-        case .backup(_, let target), .check(let target, _), .prune(let target): target
+        case .backup(_, let target), .check(let target, _, _), .prune(let target): target
         }
     }
 }

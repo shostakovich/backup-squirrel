@@ -223,26 +223,29 @@ final class AppModel {
             return .backup(plan, target)
         case .check(let targetID):
             guard let target = target(targetID) else { return nil }
-            return .check(target, subset: nextCheckSubset(for: targetID))
+            let slice = nextCheckSlice(for: targetID)
+            return .check(target, subset: slice.subset, subsetCount: slice.subsetCount)
         case .prune(let targetID):
             guard let target = target(targetID) else { return nil }
             return .prune(target)
         }
     }
 
-    private func nextCheckSubset(for targetID: Target.ID) -> Int {
-        let lastSubset = runs.lazy.reversed().compactMap { run -> Int? in
+    /// A slice with errors is read again until it passes, so the damage cannot rotate out of view.
+    private func nextCheckSlice(for targetID: Target.ID) -> (subset: Int, subsetCount: Int) {
+        let last = runs.lazy.reversed().compactMap { run -> CheckStatistics? in
             guard run.targetID == targetID, run.completedCheck, case .check(let statistics) = run.details
             else { return nil }
-            return statistics.subset
+            return statistics
         }.first
-        return (lastSubset ?? 0) % CheckStatistics.currentSubsetCount + 1
+        if let last, last.errorCount > 0 { return (last.subset, last.subsetCount) }
+        return ((last?.subset ?? 0) % CheckStatistics.currentSubsetCount + 1, CheckStatistics.currentSubsetCount)
     }
 
     private static func emptyDetails(for job: RunJob) -> RunDetails {
         switch job {
         case .backup: .backup(BackupStatistics())
-        case .check(_, let subset): .check(CheckStatistics(subset: subset))
+        case .check(_, let subset, let subsetCount): .check(CheckStatistics(subset: subset, subsetCount: subsetCount))
         case .prune: .prune(PruneStatistics())
         }
     }

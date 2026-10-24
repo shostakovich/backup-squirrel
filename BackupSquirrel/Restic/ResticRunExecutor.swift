@@ -69,7 +69,8 @@ struct ResticJobRunner: Sendable {
             }
             switch job {
             case .backup(let plan, _): return try await backup(plan, in: session)
-            case .check(_, let subset): return try await check(subset: subset, in: session)
+            case .check(_, let subset, let subsetCount):
+                return try await check(subset: subset, of: subsetCount, in: session)
             case .prune: return try await prune(in: session)
             }
         } catch let error as ProcessLaunchError {
@@ -151,8 +152,8 @@ struct ResticJobRunner: Sendable {
         return outcome
     }
 
-    private func check(subset: Int, in session: Session) async throws -> RunOutcome {
-        var statistics = CheckStatistics(subset: subset)
+    private func check(subset: Int, of subsetCount: Int, in session: Session) async throws -> RunOutcome {
+        var statistics = CheckStatistics(subset: subset, subsetCount: subsetCount)
         let check = try await session.run([
             "check", "--json", "--read-data-subset=\(statistics.subset)/\(statistics.subsetCount)",
         ])
@@ -177,7 +178,7 @@ struct ResticJobRunner: Sendable {
     private static func emptyDetails(for job: RunJob) -> RunDetails {
         switch job {
         case .backup: .backup(BackupStatistics())
-        case .check(_, let subset): .check(CheckStatistics(subset: subset))
+        case .check(_, let subset, let subsetCount): .check(CheckStatistics(subset: subset, subsetCount: subsetCount))
         case .prune: .prune(PruneStatistics())
         }
     }

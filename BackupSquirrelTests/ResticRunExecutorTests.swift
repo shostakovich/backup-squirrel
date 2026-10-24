@@ -168,17 +168,27 @@ struct ResticRunExecutorTests {
         let runner = FakeProcessRunner([
             "check": [.exit(0, stdout: [#"{"message_type":"summary","num_errors":0}"#])]
         ])
-        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8), on: runner))
+        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8, subsetCount: 128), on: runner))
         #expect(runner.invocation("check")?.arguments.prefix(3) == ["check", "--json", "--read-data-subset=8/128"])
         #expect(outcome.status == .success)
         #expect(outcome.details == .check(CheckStatistics(subset: 8)))
+    }
+
+    @Test func aCheckReadsItsSubsetOutOfTheSliceCountOfItsJob() async throws {
+        let runner = FakeProcessRunner([
+            "check": [.exit(0, stdout: [#"{"message_type":"summary","num_errors":0}"#])]
+        ])
+        let outcome = try #require(
+            await outcome(of: .check(Fixture.target(), subset: 1, subsetCount: 12), on: runner))
+        #expect(runner.invocation("check")?.arguments.prefix(3) == ["check", "--json", "--read-data-subset=1/12"])
+        #expect(outcome.details == .check(CheckStatistics(subset: 1, subsetCount: 12)))
     }
 
     @Test func aCheckThatFindsDamageFailsWithAnErrorCountButNoFailure() async throws {
         let runner = FakeProcessRunner([
             "check": [.exit(1, stdout: [#"{"message_type":"summary","num_errors":3}"#])]
         ])
-        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8), on: runner))
+        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8, subsetCount: 128), on: runner))
         #expect(outcome.status == .failed)
         #expect(outcome.details == .check(CheckStatistics(subset: 8, errorCount: 3)))
         #expect(outcome.failure == nil)
@@ -186,7 +196,7 @@ struct ResticRunExecutorTests {
 
     @Test func aCheckThatCouldNotRunHasAFailure() async throws {
         let runner = FakeProcessRunner(["check": [.exit(1, stderr: ["subprocess ssh: exit status 255"])]])
-        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8), on: runner))
+        let outcome = try #require(await outcome(of: .check(Fixture.target(), subset: 8, subsetCount: 128), on: runner))
         #expect(outcome.status == .failed)
         #expect(outcome.failure == .targetUnreachable)
     }
